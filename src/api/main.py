@@ -59,7 +59,7 @@ def get_latest_risk():
         "last_updated": latest_date,
         "spy_price": round(float(latest_row['SPY']), 2),
         "vix_level": round(float(latest_row['VIX']), 2),
-        "hy_spread": round(float(latest_row['HY_Spread']), 2),
+        "hy_spread": round(float(latest_row['BAA_Treasury_Spread']), 2),
         "market_stress_index": round(msi_score, 3),
         "risk_probability_10d": round(risk_prob * 100, 1),
         "risk_status": status
@@ -81,7 +81,7 @@ def get_historical_data(days: int = 1260):
             "date": date.strftime('%Y-%m-%d'),
             "spy": round(float(row['SPY']), 2),
             "vix": round(float(row['VIX']), 2),
-            "hy_spread": round(float(row['HY_Spread']), 2),
+            "hy_spread": round(float(row['BAA_Treasury_Spread']), 2),
             "msi": round(float(row['MSI']), 3),
             "prob_logistic": round(float(row['Prob_Logistic']) * 100, 1),
             "prob_xgboost": round(float(row['Prob_XGBoost']) * 100, 1),

@@ -1,108 +1,338 @@
 import pandas as pd
 import numpy as np
 import logging
-from sklearn.metrics import roc_auc_score, precision_recall_curve, auc, precision_score, recall_score, f1_score, confusion_matrix
+
+from sklearn.metrics import (
+    roc_auc_score,
+    average_precision_score,
+    precision_score,
+    recall_score,
+    f1_score,
+    confusion_matrix,
+    brier_score_loss,
+)
+
 from src.config import DATA_PROCESSED_DIR
 
-logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
+
+logging.basicConfig(
+    level=logging.INFO,
+    format="%(asctime)s - %(levelname)s - %(message)s"
+)
 logger = logging.getLogger(__name__)
 
+
 class ModelEvaluator:
-    def __init__(self, input_filename="oos_predictions.csv"):
+    def __init__(
+        self,
+        input_filename="oos_predictions.csv",
+        default_threshold=0.5
+    ):
         self.input_path = DATA_PROCESSED_DIR / input_filename
-        
+        self.default_threshold = default_threshold
+
+    def load_data(self):
+        logger.info(f"Reading OOS predictions from {self.input_path}")
+
+        df = pd.read_csv(
+            self.input_path,
+            index_col="Date",
+            parse_dates=True
+        ).sort_index()
+
+        required_cols = [
+            "Actual_Target",
+            "Prob_Logistic",
+            "Prob_XGBoost",
+            "MSI",
+            "SPY",
+            "VIX",
+            "BAA_Treasury_Spread",
+        ]
+
+        missing = [c for c in required_cols if c not in df.columns]
+
+        if missing:
+            raise ValueError(
+                f"Missing required columns in OOS predictions: {missing}"
+            )
+
+        return df
+
+    @staticmethod
+    def calculate_binary_metrics(y_true, y_prob, threshold):
+        y_pred = (y_prob >= threshold).astype(int)
+
+        tn, fp, fn, tp = confusion_matrix(
+            y_true,
+            y_pred,
+            labels=[0, 1]
+        ).ravel()
+
+        precision = precision_score(
+            y_true,
+            y_pred,
+            zero_division=0
+        )
+
+        recall = recall_score(
+            y_true,
+            y_pred,
+            zero_division=0
+        )
+
+        f1 = f1_score(
+            y_true,
+            y_pred,
+            zero_division=0
+        )
+
+        false_alarm_rate = (
+            fp / (fp + tn)
+            if (fp + tn) > 0
+            else np.nan
+        )
+
+        missed_event_rate = (
+            fn / (fn + tp)
+            if (fn + tp) > 0
+            else np.nan
+        )
+
+        return {
+            "Threshold": threshold,
+            "TP": tp,
+            "FP": fp,
+            "TN": tn,
+            "FN": fn,
+            "Precision": precision,
+            "Recall": recall,
+            "F1": f1,
+            "False Alarm Rate": false_alarm_rate,
+            "Missed Event Rate": missed_event_rate,
+        }
+
     def evaluate_overall(self):
         """
-        기획서 (Page 9 - Section 13)
-        OOS(Out-of-Sample) 예측 결과에 대해 ROC-AUC, PR-AUC, Precision, Recall, F1, False Alarm Rate를 평가합니다.
+        Evaluate strictly OOS predictions.
+
+        ROC-AUC and PR-AUC are threshold-independent.
+
+        Precision / Recall / F1 / False Alarm Rate are reported
+        at the fixed baseline operating threshold of 0.50.
+
+        Brier Score is included as a first diagnostic of
+        probability calibration.
         """
-        logger.info(f"Reading OOS predictions from {self.input_path}")
-        df = pd.read_csv(self.input_path, index_col='Date', parse_dates=True)
-        
-        y_true = df['Actual_Target']
-        
+
+        df = self.load_data()
+
+        y_true = df["Actual_Target"].astype(int)
+
+        prevalence = y_true.mean()
+
+        logger.info(
+            f"OOS Period: {df.index.min().date()} ~ "
+            f"{df.index.max().date()}"
+        )
+        logger.info(f"OOS Observations: {len(df)}")
+        logger.info(
+            f"Positive Target Prevalence: {prevalence:.2%}"
+        )
+
         models = {
-            'Logistic Regression (Baseline)': df['Prob_Logistic'],
-            'XGBoost (Main Model)': df['Prob_XGBoost']
+            "Logistic Regression": df["Prob_Logistic"],
+            "XGBoost": df["Prob_XGBoost"],
         }
-        
+
         results = []
-        
-        for name, y_prob in models.items():
-            # 1. ROC-AUC & PR-AUC
+
+        for model_name, y_prob in models.items():
+
             roc_auc = roc_auc_score(y_true, y_prob)
-            precision_curve, recall_curve, _ = precision_recall_curve(y_true, y_prob)
-            pr_auc = auc(recall_curve, precision_curve)
-            
-            # 2. Binary classification metrics (Threshold = 0.5)
-            y_pred = (y_prob >= 0.5).astype(int)
-            tn, fp, fn, tp = confusion_matrix(y_true, y_pred).ravel()
-            
-            precision = precision_score(y_true, y_pred, zero_division=0)
-            recall = recall_score(y_true, y_pred, zero_division=0)
-            f1 = f1_score(y_true, y_pred, zero_division=0)
-            
-            false_alarm_rate = fp / (fp + tn + 1e-8) # FPR
-            missed_event_rate = fn / (fn + tp + 1e-8) # FNR
-            
+
+            # Average Precision is used as the primary
+            # summary metric for the precision-recall curve.
+            pr_auc = average_precision_score(
+                y_true,
+                y_prob
+            )
+
+            brier = brier_score_loss(
+                y_true,
+                y_prob
+            )
+
+            binary = self.calculate_binary_metrics(
+                y_true,
+                y_prob,
+                self.default_threshold
+            )
+
             results.append({
-                'Model': name,
-                'ROC-AUC': round(roc_auc, 4),
-                'PR-AUC': round(pr_auc, 4),
-                'Precision': round(precision, 4),
-                'Recall': round(recall, 4),
-                'F1 Score': round(f1, 4),
-                'False Alarm Rate': round(false_alarm_rate, 4),
-                'Missed Event Rate': round(missed_event_rate, 4)
+                "Model": model_name,
+                "ROC-AUC": roc_auc,
+                "PR-AUC (AP)": pr_auc,
+                "Brier Score": brier,
+                **binary,
             })
-            
-        metrics_df = pd.DataFrame(results)
-        logger.info("\n" + metrics_df.to_string(index=False))
-        return metrics_df
-        
+
+        result_df = pd.DataFrame(results)
+
+        logger.info(
+            "\nOVERALL OOS PERFORMANCE\n" +
+            result_df.round(4).to_string(index=False)
+        )
+
+        return result_df
+
+    def evaluate_threshold_grid(self):
+        """
+        Diagnostic threshold table only.
+
+        IMPORTANT:
+        This table is NOT used to select the final threshold
+        from the OOS test set.
+
+        It only illustrates the operating trade-off between
+        recall, precision, false alarms, and missed events.
+        """
+
+        df = self.load_data()
+
+        y_true = df["Actual_Target"].astype(int)
+
+        models = {
+            "Logistic Regression": df["Prob_Logistic"],
+            "XGBoost": df["Prob_XGBoost"],
+        }
+
+        thresholds = [
+            0.30,
+            0.40,
+            0.50,
+            0.60,
+            0.70,
+        ]
+
+        rows = []
+
+        for model_name, y_prob in models.items():
+            for threshold in thresholds:
+
+                metrics = self.calculate_binary_metrics(
+                    y_true,
+                    y_prob,
+                    threshold
+                )
+
+                rows.append({
+                    "Model": model_name,
+                    **metrics,
+                })
+
+        threshold_df = pd.DataFrame(rows)
+
+        logger.info(
+            "\nTHRESHOLD SENSITIVITY "
+            "(DIAGNOSTIC ONLY — NOT FOR OOS TUNING)\n" +
+            threshold_df.round(4).to_string(index=False)
+        )
+
+        return threshold_df
+
     def evaluate_historical_events(self):
         """
-        기획서 (Page 9 & 12 - Section 14)
-        과거 주요 금융위기 및 충격 구간에서 모델이 사전에 경보(Risk Probability 상승)를 울렸는지 분석합니다.
+        Descriptive analysis of OOS probabilities during
+        major historical stress episodes.
+
+        This is NOT yet an early-warning lead-time test.
         """
-        logger.info("Evaluating Historical Crisis Events (Page 9 & 12)...")
-        df = pd.read_csv(self.input_path, index_col='Date', parse_dates=True)
-        
+
+        df = self.load_data()
+
         events = {
-            '2008 Financial Crisis': ('2007-10-01', '2009-03-31'),
-            '2011 Eurozone / US Debt': ('2011-07-01', '2011-12-31'),
-            '2015-2016 China / Oil Shock': ('2015-08-01', '2016-02-28'),
-            '2018 Volatility Shock (Volmageddon)': ('2018-01-15', '2018-03-31'),
-            '2020 COVID-19 Crash': ('2020-02-01', '2020-04-30'),
-            '2022 Inflation / Rate Shock': ('2022-01-01', '2022-10-31'),
-            '2023 US Banking Stress (SVB)': ('2023-03-01', '2023-04-30')
+            "2008 Financial Crisis":
+                ("2007-10-01", "2009-03-31"),
+
+            "2011 Eurozone / US Debt":
+                ("2011-07-01", "2011-12-31"),
+
+            "2015-2016 China / Oil Shock":
+                ("2015-08-01", "2016-02-28"),
+
+            "2018 Volatility Shock":
+                ("2018-01-15", "2018-03-31"),
+
+            "2020 COVID-19 Crash":
+                ("2020-02-01", "2020-04-30"),
+
+            "2022 Inflation / Rate Shock":
+                ("2022-01-01", "2022-10-31"),
+
+            "2023 US Banking Stress":
+                ("2023-03-01", "2023-04-30"),
         }
-        
-        event_summary = []
+
+        rows = []
+
         for event_name, (start_date, end_date) in events.items():
+
             sub = df.loc[start_date:end_date]
-            if len(sub) == 0:
+
+            if sub.empty:
                 continue
-                
-            avg_prob_xgb = sub['Prob_XGBoost'].mean()
-            max_prob_xgb = sub['Prob_XGBoost'].max()
-            high_risk_days_xgb = (sub['Prob_XGBoost'] >= 0.5).sum()
-            total_days = len(sub)
-            
-            event_summary.append({
-                'Event': event_name,
-                'Start-End': f"{start_date} ~ {end_date}",
-                'Total Days': total_days,
-                'XGB High Risk Days': high_risk_days_xgb,
-                'XGB Max Risk Prob': f"{max_prob_xgb*100:.1f}%",
-                'XGB Avg Risk Prob': f"{avg_prob_xgb*100:.1f}%"
+
+            rows.append({
+                "Event": event_name,
+                "Start": start_date,
+                "End": end_date,
+                "Days": len(sub),
+
+                "Actual Stress Days":
+                    int(sub["Actual_Target"].sum()),
+
+                "Logistic Avg Prob":
+                    sub["Prob_Logistic"].mean(),
+
+                "Logistic Max Prob":
+                    sub["Prob_Logistic"].max(),
+
+                "Logistic >= 0.5 Days":
+                    int(
+                        (sub["Prob_Logistic"] >= 0.5).sum()
+                    ),
+
+                "XGB Avg Prob":
+                    sub["Prob_XGBoost"].mean(),
+
+                "XGB Max Prob":
+                    sub["Prob_XGBoost"].max(),
+
+                "XGB >= 0.5 Days":
+                    int(
+                        (sub["Prob_XGBoost"] >= 0.5).sum()
+                    ),
             })
-            
-        event_df = pd.DataFrame(event_summary)
-        logger.info("\n" + event_df.to_string(index=False))
+
+        event_df = pd.DataFrame(rows)
+
+        logger.info(
+            "\nHISTORICAL EVENT DESCRIPTIVE ANALYSIS\n" +
+            event_df.round(4).to_string(index=False)
+        )
+
         return event_df
 
+
 if __name__ == "__main__":
-    evaluator = ModelEvaluator()
+
+    evaluator = ModelEvaluator(
+        default_threshold=0.5
+    )
+
     evaluator.evaluate_overall()
+
+    evaluator.evaluate_threshold_grid()
+
     evaluator.evaluate_historical_events()
