@@ -1,0 +1,30 @@
+version: '3.8'
+
+services:
+  # [14] FastAPI 백엔드 서버
+  api:
+    build:
+      context: .
+      dockerfile: Dockerfile.api
+    container_name: market-stress-api
+    ports:
+      - "8000:8000"
+    volumes:
+      - ./data:/app/data
+      - ./models:/app/models
+    environment:
+      - FRED_API_KEY=${FRED_API_KEY:-}
+    command: uvicorn src.api.main:app --host 0.0.0.0 --port 8000
+
+  # [15] Next.js 프론트엔드 서버
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    container_name: market-stress-frontend
+    ports:
+      - "3000:3000"
+    environment:
+      - NEXT_PUBLIC_API_URL=http://api:8000
+    depends_on:
+      - api
