@@ -21,6 +21,9 @@ import {
 } from 'lucide-react';
 
 
+const API_URL =
+  process.env.NEXT_PUBLIC_API_URL || 'http://127.0.0.1:8000';
+
 interface LatestData {
   last_updated: string;
   spy_price: number;
@@ -75,8 +78,8 @@ export default function MarketRiskPage() {
     async function fetchData() {
       try {
         const [resLatest, resHist] = await Promise.all([
-          fetch('http://127.0.0.1:8000/api/latest'),
-          fetch('http://127.0.0.1:8000/api/historical?days=10000'),
+          fetch(`${API_URL}/api/latest`),
+          fetch(`${API_URL}/api/historical?days=10000`),
         ]);
 
         if (!resLatest.ok || !resHist.ok) {

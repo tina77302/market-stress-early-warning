@@ -14,6 +14,9 @@ import {
   ReferenceLine,
 } from 'recharts';
 
+const API_URL =
+  process.env.NEXT_PUBLIC_API_URL || 'http://127.0.0.1:8000';
+
 interface MetricRow {
   Model: string;
   'ROC-AUC': number;
@@ -72,7 +75,7 @@ export default function ModelValidationPage() {
   useEffect(() => {
     async function fetchValidationData() {
       try {
-        const res = await fetch('http://127.0.0.1:8000/api/validation');
+        const res = await fetch(`${API_URL}/api/validation`);
 
         if (!res.ok) {
           throw new Error(`Validation API returned ${res.status}`);
@@ -93,7 +96,7 @@ export default function ModelValidationPage() {
     async function fetchHistoricalData() {
       try {
         const res = await fetch(
-          'http://127.0.0.1:8000/api/historical?days=10000'
+          `${API_URL}/api/historical?days=10000`
         );
 
       if (!res.ok) {
