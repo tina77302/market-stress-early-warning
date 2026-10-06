@@ -1,42 +1,87 @@
 'use client';
 
 import React, { useEffect, useState } from 'react';
-import { BarChart3, AlertOctagon, CheckCircle2, ShieldAlert } from 'lucide-react';
+import { BarChart3 } from 'lucide-react';
+import {
+  ComposedChart,
+  Area,
+  Line,
+  XAxis,
+  YAxis,
+  CartesianGrid,
+  Tooltip,
+  ResponsiveContainer,
+  ReferenceLine,
+} from 'recharts';
 
 interface MetricRow {
   Model: string;
   'ROC-AUC': number;
-  'PR-AUC': number;
+  'PR-AUC (AP)': number;
+  'Brier Score': number;
+  Threshold: number;
+  TP: number;
+  FP: number;
+  TN: number;
+  FN: number;
   Precision: number;
   Recall: number;
-  'F1 Score': number;
+  F1: number;
   'False Alarm Rate': number;
   'Missed Event Rate': number;
 }
 
 interface EventRow {
   Event: string;
-  'Start-End': string;
-  'Total Days': number;
-  'XGB High Risk Days': number;
-  'XGB Max Risk Prob': string;
-  'XGB Avg Risk Prob': string;
+  Start: string;
+  End: string;
+  Days: number;
+  'Actual Stress Days': number;
+  'Logistic Avg Prob': number;
+  'Logistic Max Prob': number;
+  'Logistic >= 0.5 Days': number;
+  'XGB Avg Prob': number;
+  'XGB Max Prob': number;
+  'XGB >= 0.5 Days': number;
 }
+
+interface HistoricalRow {
+  date: string;
+  spy: number;
+  risk_score_xgboost: number;
+  risk_score_logistic: number;
+  target: number;
+}
+const fmt = (value: number | undefined, digits = 3) =>
+  typeof value === 'number' && Number.isFinite(value)
+    ? value.toFixed(digits)
+    : '—';
+
+const pct = (value: number | undefined, digits = 1) =>
+  typeof value === 'number' && Number.isFinite(value)
+    ? `${(value * 100).toFixed(digits)}`
+    : '—';
 
 export default function ModelValidationPage() {
   const [metrics, setMetrics] = useState<MetricRow[]>([]);
   const [events, setEvents] = useState<EventRow[]>([]);
-  const [selectedEvent, setSelectedEvent] = useState<string>('2008 Financial Crisis');
+  const [history, setHistory] = useState<HistoricalRow[]>([]);
+  const [selectedEvent, setSelectedEvent] =
+   useState<string>('2008 Financial Crisis');
 
   useEffect(() => {
     async function fetchValidationData() {
       try {
         const res = await fetch('http://127.0.0.1:8000/api/validation');
-        if (res.ok) {
-          const data = await res.json();
-          setMetrics(data.overall_metrics);
-          setEvents(data.historical_events);
+
+        if (!res.ok) {
+          throw new Error(`Validation API returned ${res.status}`);
         }
+
+        const data = await res.json();
+
+        setMetrics(data.overall_metrics ?? []);
+        setEvents(data.historical_events ?? []);
       } catch (err) {
         console.error('Failed to fetch validation metrics:', err);
       }
@@ -44,8 +89,37 @@ export default function ModelValidationPage() {
     fetchValidationData();
   }, []);
 
-  const currentEvent = events.find(e => e.Event === selectedEvent) || events[0];
+  useEffect(() => {
+    async function fetchHistoricalData() {
+      try {
+        const res = await fetch(
+          'http://127.0.0.1:8000/api/historical?days=10000'
+        );
 
+      if (!res.ok) {
+        throw new Error(`Historical API returned ${res.status}`);
+      }
+
+      const data = await res.json();
+      setHistory(data.data ?? []);
+    } catch (err) {
+      console.error('Failed to fetch historical OOS data:', err);
+    }
+  }
+
+  fetchHistoricalData();
+}, []);
+
+  const currentEvent =
+    events.find((e) => e.Event === selectedEvent) || events[0];
+
+  const eventHistory = currentEvent
+  ? history.filter(
+      (row) =>
+        row.date >= currentEvent.Start &&
+        row.date <= currentEvent.End
+    )
+  : [];
   return (
     <div className="space-y-8">
       {/* Section Header */}
@@ -54,16 +128,23 @@ export default function ModelValidationPage() {
           <BarChart3 className="w-5 h-5 text-financial-green" />
           <span>PAGE 02 — MODEL VALIDATION & HISTORICAL BACKTEST</span>
         </h1>
+
         <p className="text-xs text-gray-400 mt-1">
-          Rigorous Out-of-Sample Walk-Forward Validation without Data Leakage (2000–2026 Dataset).
+          Purged walk-forward out-of-sample validation with a 10-trading-day
+          label-overlap gap.
         </p>
       </div>
 
-      {/* Model Performance Comparison Table */}
+      {/* Model Performance */}
       <div className="bg-dark-card border border-dark-border p-6 rounded-lg space-y-4">
-        <h3 className="text-sm font-bold text-gray-200 tracking-wider">
-          OVERALL OUT-OF-SAMPLE PERFORMANCE METRICS
-        </h3>
+        <div>
+          <h3 className="text-sm font-bold text-gray-200 tracking-wider">
+            OVERALL OUT-OF-SAMPLE PERFORMANCE
+          </h3>
+          <p className="text-xs text-gray-500 mt-1">
+            OOS period: 2006-08-09 — 2026-09-16
+          </p>
+        </div>
 
         <div className="overflow-x-auto">
           <table className="w-full text-left border-collapse text-xs font-mono">
@@ -72,51 +153,91 @@ export default function ModelValidationPage() {
                 <th className="p-3">MODEL</th>
                 <th className="p-3">ROC-AUC</th>
                 <th className="p-3">PR-AUC</th>
+                <th className="p-3">BRIER</th>
                 <th className="p-3">PRECISION</th>
                 <th className="p-3">RECALL</th>
-                <th className="p-3">F1 SCORE</th>
-                <th className="p-3 text-financial-amber">FALSE ALARM RATE</th>
-                <th className="p-3 text-financial-red">MISSED EVENT RATE</th>
+                <th className="p-3">F1</th>
+                <th className="p-3 text-financial-amber">
+                  FALSE ALARM
+                </th>
+                <th className="p-3 text-financial-red">
+                  MISSED EVENT
+                </th>
               </tr>
             </thead>
+
             <tbody>
               {metrics.map((row, idx) => (
-                <tr key={idx} className="border-b border-dark-border hover:bg-dark-hover transition-colors">
-                  <td className="p-3 font-bold text-white flex items-center space-x-2">
-                    {row.Model.includes('XGBoost') ? (
-                      <CheckCircle2 className="w-4 h-4 text-financial-green" />
-                    ) : (
-                      <div className="w-4 h-4 rounded-full bg-gray-600" />
-                    )}
-                    <span>{row.Model}</span>
+                <tr
+                  key={idx}
+                  className="border-b border-dark-border hover:bg-dark-hover transition-colors"
+                >
+                    <td className="p-3 font-bold text-white">
+                      <div className="flex items-center space-x-2">
+                        <div className="w-2 h-2 rounded-full bg-gray-500" />
+                        <span>{row.Model}</span>
+                      </div>
+                    </td>
+
+                    <td className="p-3 font-bold text-financial-blue">
+                    {fmt(row['ROC-AUC'])}
                   </td>
-                  <td className="p-3 font-bold text-financial-blue">{row['ROC-AUC']}</td>
-                  <td className="p-3 font-bold text-purple-400">{row['PR-AUC']}</td>
-                  <td className="p-3">{row.Precision}</td>
-                  <td className="p-3">{row.Recall}</td>
-                  <td className="p-3 font-bold text-emerald-400">{row['F1 Score']}</td>
-                  <td className="p-3 text-financial-amber">{row['False Alarm Rate']}</td>
-                  <td className="p-3 text-financial-red">{row['Missed Event Rate']}</td>
+
+                  <td className="p-3 font-bold text-purple-400">
+                    {fmt(row['PR-AUC (AP)'])}
+                  </td>
+
+                  <td className="p-3">
+                    {fmt(row['Brier Score'])}
+                  </td>
+
+                  <td className="p-3">
+                    {fmt(row.Precision)}
+                  </td>
+
+                  <td className="p-3">
+                    {fmt(row.Recall)}
+                  </td>
+
+                  <td className="p-3 font-bold text-emerald-400">
+                    {fmt(row.F1)}
+                  </td>
+
+                  <td className="p-3 text-financial-amber">
+                    {fmt(row['False Alarm Rate'])}
+                  </td>
+
+                  <td className="p-3 text-financial-red">
+                    {fmt(row['Missed Event Rate'])}
+                  </td>
                 </tr>
               ))}
             </tbody>
           </table>
         </div>
+
+        <div className="border-t border-dark-border pt-3 text-[11px] text-gray-500 leading-relaxed">
+          ROC-AUC and PR-AUC evaluate ranking performance using continuous
+          out-of-sample model scores. Precision, Recall, F1, False Alarm Rate,
+          and Missed Event Rate are reported at a fixed 0.50 reference
+          threshold. The threshold was not selected using the OOS results.
+        </div>
       </div>
 
-      {/* Historical Crisis Event Backtest Section */}
+      {/* Historical Crisis Validation */}
       <div className="bg-dark-card border border-dark-border p-6 rounded-lg space-y-6">
         <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
           <div>
             <h3 className="text-sm font-bold text-gray-200 tracking-wider">
-              HISTORICAL CRISIS EVENT VALIDATION
+              HISTORICAL STRESS CASE STUDIES
             </h3>
-            <p className="text-xs text-gray-400">
-              Check how the XGBoost AI model responded during major past market shocks.
+
+            <p className="text-xs text-gray-400 mt-1">
+              Descriptive analysis of XGBoost walk-forward OOS risk scores
+              during predefined historical market-stress windows.
             </p>
           </div>
 
-          {/* Crisis Dropdown Selector */}
           <select
             value={selectedEvent}
             onChange={(e) => setSelectedEvent(e.target.value)}
@@ -130,29 +251,249 @@ export default function ModelValidationPage() {
           </select>
         </div>
 
-        {/* Selected Crisis Summary Cards */}
         {currentEvent && (
-          <div className="grid grid-cols-1 md:grid-cols-4 gap-4 pt-2">
-            <div className="bg-dark-bg border border-dark-border p-4 rounded">
-              <span className="text-xs text-gray-500 uppercase">Period</span>
-              <p className="text-sm font-bold font-mono text-gray-200 mt-1">{currentEvent['Start-End']}</p>
+          <>
+            <div className="grid grid-cols-1 md:grid-cols-5 gap-4 pt-2">
+              <div className="bg-dark-bg border border-dark-border p-4 rounded">
+                <span className="text-xs text-gray-500 uppercase">
+                  Period
+                </span>
+
+                <p className="text-sm font-bold font-mono text-gray-200 mt-2">
+                  {currentEvent.Start}
+                </p>
+
+                <p className="text-xs font-mono text-gray-500">
+                  to {currentEvent.End}
+                </p>
+              </div>
+
+              <div className="bg-dark-bg border border-dark-border p-4 rounded">
+                <span className="text-xs text-gray-500 uppercase">
+                  Event Window
+                </span>
+
+                <p className="text-lg font-bold font-mono text-white mt-2">
+                  {currentEvent.Days}
+                </p>
+
+                <p className="text-xs text-gray-500">
+                  trading days
+                </p>
+              </div>
+
+              <div className="bg-dark-bg border border-dark-border p-4 rounded">
+                <span className="text-xs text-gray-500 uppercase">
+                  Actual Stress Days
+                </span>
+
+                <p className="text-lg font-bold font-mono text-white mt-2">
+                  {currentEvent['Actual Stress Days']}
+                </p>
+
+                <p className="text-xs text-gray-500">
+                  target-defined days
+                </p>
+              </div>
+
+              <div className="bg-dark-bg border border-dark-border p-4 rounded">
+                <span className="text-xs text-gray-500 uppercase">
+                  Max XGB Risk Score
+                </span>
+
+                <p className="text-lg font-bold font-mono text-financial-red mt-2">
+                  {pct(currentEvent['XGB Max Prob'])}
+                  <span className="text-xs text-gray-500 ml-1">/ 100</span>
+                </p>
+              </div>
+
+              <div className="bg-dark-bg border border-dark-border p-4 rounded">
+                <span className="text-xs text-gray-500 uppercase">
+                  Score ≥ 50 Days
+                </span>
+
+                <p className="text-lg font-bold font-mono text-financial-amber mt-2">
+                  {currentEvent['XGB >= 0.5 Days']}
+                  <span className="text-xs text-gray-500 ml-1">
+                    / {currentEvent.Days}
+                  </span>
+                </p>
+              </div>
             </div>
-            <div className="bg-dark-bg border border-dark-border p-4 rounded">
-              <span className="text-xs text-gray-500 uppercase">Total Event Window</span>
-              <p className="text-lg font-bold font-mono text-white mt-1">{currentEvent['Total Days']} Trading Days</p>
+
+            <div className="border-t border-dark-border pt-4">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-xs">
+                <div>
+                  <span className="text-gray-500">
+                    XGBoost average OOS risk score
+                  </span>
+                  <span className="font-mono text-gray-200 ml-2">
+                    {pct(currentEvent['XGB Avg Prob'])} / 100
+                  </span>
+                </div>
+
+                <div>
+                  <span className="text-gray-500">
+                    Logistic average OOS risk score
+                  </span>
+                  <span className="font-mono text-gray-200 ml-2">
+                    {pct(currentEvent['Logistic Avg Prob'])} / 100
+                  </span>
+                </div>
+              </div>
             </div>
-            <div className="bg-dark-bg border border-dark-border p-4 rounded">
-              <span className="text-xs text-gray-500 uppercase">Max Risk Probability</span>
-              <p className="text-lg font-bold font-mono text-financial-red mt-1">{currentEvent['XGB Max Risk Prob']}</p>
-            </div>
-            <div className="bg-dark-bg border border-dark-border p-4 rounded">
-              <span className="text-xs text-gray-500 uppercase">High Risk Days (Prob &gt; 50%)</span>
-              <p className="text-lg font-bold font-mono text-financial-amber mt-1">
-                {currentEvent['XGB High Risk Days']} / {currentEvent['Total Days']} Days
-              </p>
-            </div>
-          </div>
+                          {/* Historical OOS Risk Trajectory */}
+              <div className="border-t border-dark-border pt-6 space-y-4">
+                <div className="flex flex-col md:flex-row md:items-center justify-between gap-3">
+                  <div>
+                    <h4 className="text-xs font-bold text-gray-200 tracking-wider">
+                      HISTORICAL OOS RISK TRAJECTORY
+                    </h4>
+                    <p className="text-[11px] text-gray-500 mt-1">
+                      XGBoost walk-forward OOS risk score versus SPY during the
+                      selected historical window.
+                    </p>
+                  </div>
+
+                  <div className="flex items-center gap-5 text-[11px] font-mono">
+                    <div className="flex items-center gap-2 text-gray-400">
+                      <span className="w-5 h-[2px] bg-financial-red" />
+                      XGBoost 10D Risk Score
+                    </div>
+
+                    <div className="flex items-center gap-2 text-gray-400">
+                      <span className="w-5 h-[2px] bg-financial-blue" />
+                      SPY Price
+                    </div>
+                  </div>
+                </div>
+
+                <div className="h-[360px] w-full">
+                  <ResponsiveContainer width="100%" height="100%">
+                    <ComposedChart
+                      data={eventHistory}
+                      margin={{
+                        top: 10,
+                        right: 20,
+                        left: 0,
+                        bottom: 5,
+                      }}
+                    >
+                      <CartesianGrid
+                        strokeDasharray="3 3"
+                        stroke="#1f2937"
+                        vertical={false}
+                      />
+
+                      <XAxis
+                        dataKey="date"
+                        stroke="#6b7280"
+                        tick={{ fontSize: 10 }}
+                        minTickGap={40}
+                      />
+
+                      <YAxis
+                        yAxisId="risk"
+                        domain={[0, 100]}
+                        stroke="#F23645"
+                        tick={{ fontSize: 10 }}
+                        width={42}
+                      />
+
+                      <YAxis
+                        yAxisId="spy"
+                        orientation="right"
+                        domain={['auto', 'auto']}
+                        stroke="#4DA3FF"
+                        tick={{ fontSize: 10 }}
+                        width={55}
+                      />
+
+                      <Tooltip
+                        contentStyle={{
+                          backgroundColor: '#111827',
+                          border: '1px solid #374151',
+                          borderRadius: '6px',
+                          fontSize: '12px',
+                        }}
+                        labelStyle={{ color: '#9ca3af' }}
+                        formatter={(value: number, name: string) => {
+                          if (name === 'XGBoost 10D Risk Score') {
+                            return [`${value.toFixed(1)} / 100`, name];
+                          }
+
+                          if (name === 'SPY Price') {
+                            return [`$${value.toFixed(2)}`, name];
+                          }
+
+                          return [value, name];
+                        }}
+                      />
+
+                      <ReferenceLine
+                        yAxisId="risk"
+                        y={50}
+                        stroke="#6b7280"
+                        strokeDasharray="5 5"
+                        label={{
+                          value: '50',
+                          position: 'insideTopLeft',
+                          fill: '#6b7280',
+                          fontSize: 10,
+                        }}
+                      />
+
+                      <Area
+                        yAxisId="risk"
+                        type="monotone"
+                        dataKey="risk_score_xgboost"
+                        name="XGBoost 10D Risk Score"
+                        stroke="#F23645"
+                        fill="#F23645"
+                        fillOpacity={0.18}
+                        strokeWidth={1.8}
+                        dot={false}
+                        isAnimationActive={false}
+                      />
+
+                      <Line
+                        yAxisId="spy"
+                        type="monotone"
+                        dataKey="spy"
+                        name="SPY Price"
+                        stroke="#4DA3FF"
+                        strokeWidth={2.2}
+                        dot={false}
+                        isAnimationActive={false}
+                      />
+                    </ComposedChart>
+                  </ResponsiveContainer>
+                </div>
+
+                <p className="text-[11px] text-gray-500 leading-relaxed">
+                  The dashed 50 line is a fixed reference operating threshold,
+                  not a threshold selected from out-of-sample results. The chart
+                  is descriptive and does not imply prediction of SPY direction.
+                </p>
+              </div>
+
+            {currentEvent.Event === '2023 US Banking Stress' && (
+              <div className="bg-dark-bg border border-dark-border rounded p-4 text-xs text-gray-400 leading-relaxed">
+                The March–April 2023 banking turmoil produced elevated model
+                scores on several days, but this predefined window contained
+                no positive broad-market stress days under the study&apos;s
+                target definition. It is therefore treated as a special case
+                rather than a positive stress-event validation period.
+              </div>
+            )}
+          </>
         )}
+
+        <p className="text-[11px] text-gray-500 leading-relaxed">
+          Historical windows are descriptive case studies based strictly on
+          walk-forward out-of-sample scores. They are not reported as
+          independently clustered crisis-detection rates.
+        </p>
       </div>
     </div>
   );
