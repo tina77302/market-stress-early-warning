@@ -352,3 +352,94 @@ if __name__ == "__main__":
     )
 
     evaluator.evaluate()
+    
+    if __name__ == "__main__":
+
+    validator = MultiHorizonValidator()
+
+    df = pd.read_csv(
+        validator.input_path,
+        index_col="Date",
+        parse_dates=True
+    )
+
+    df.sort_index(inplace=True)
+
+    os.makedirs(
+        DATA_PROCESSED_DIR,
+        exist_ok=True
+    )
+
+    all_metrics = []
+
+    for horizon in HORIZONS:
+
+        logger.info(
+            f"========== {horizon}D VALIDATION =========="
+        )
+
+        oos_results = validator.run_horizon(
+            df,
+            horizon
+        )
+
+        output_path = (
+            DATA_PROCESSED_DIR
+            / f"oos_predictions_{horizon}d.csv"
+        )
+
+        oos_results.to_csv(output_path)
+
+        metrics = validator.calculate_metrics(
+            oos_results,
+            horizon
+        )
+
+        all_metrics.append(metrics)
+
+        logger.info(
+            f"{horizon}D OOS predictions saved to: "
+            f"{output_path}"
+        )
+
+    metrics_df = pd.concat(
+        all_metrics,
+        ignore_index=True
+    )
+
+    metrics_path = (
+        DATA_PROCESSED_DIR
+        / "multi_horizon_metrics.csv"
+    )
+
+    metrics_df.to_csv(
+        metrics_path,
+        index=False
+    )
+
+    print("\n")
+    print("=" * 100)
+    print("MULTI-HORIZON OOS RESULTS")
+    print("=" * 100)
+
+    print(
+        metrics_df[
+            [
+                "Horizon",
+                "Model",
+                "OOS_Observations",
+                "Positive_Rate",
+                "ROC_AUC",
+                "PR_AUC",
+                "Brier",
+                "Precision_0.5",
+                "Recall_0.5",
+                "F1_0.5",
+                "FAR_0.5",
+                "Missed_Rate_0.5",
+            ]
+        ].to_string(index=False)
+    )
+
+    print("=" * 100)
+    print(f"Metrics saved to: {metrics_path}")

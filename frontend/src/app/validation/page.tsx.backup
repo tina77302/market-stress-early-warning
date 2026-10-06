@@ -129,6 +129,395 @@ const horizonDefinitions = [
     strongest: false,
   },
 ];
+const horizonPerformance = [
+  {
+    horizon: '1D',
+    logisticRoc: 0.9886,
+    xgbRoc: 0.9844,
+    logisticPr: 0.9247,
+    xgbPr: 0.9001,
+    strongest: true,
+  },
+  {
+    horizon: '5D',
+    logisticRoc: 0.9611,
+    xgbRoc: 0.9498,
+    logisticPr: 0.8557,
+    xgbPr: 0.8337,
+    strongest: false,
+  },
+  {
+    horizon: '10D',
+    logisticRoc: 0.9220,
+    xgbRoc: 0.8991,
+    logisticPr: 0.8065,
+    xgbPr: 0.7778,
+    strongest: false,
+  },
+  {
+    horizon: '20D',
+    logisticRoc: 0.8555,
+    xgbRoc: 0.8138,
+    logisticPr: 0.7320,
+    xgbPr: 0.7099,
+    strongest: false,
+  },
+];
+
+const horizonDefinitions = [
+  {
+    horizon: '1D',
+    period: 'NEXT TRADING DAY',
+    question: 'Will a market Stress Event occur on the next trading day?',
+    strongest: true,
+  },
+  {
+    horizon: '5D',
+    period: '≈ 1 TRADING WEEK',
+    question:
+      'Will a Stress Event occur at least once within the next 5 trading days?',
+    strongest: false,
+  },
+  {
+    horizon: '10D',
+    period: '≈ 2 TRADING WEEKS',
+    question:
+      'Will a Stress Event occur at least once within the next 10 trading days?',
+    strongest: false,
+  },
+  {
+    horizon: '20D',
+    period: '≈ 1 TRADING MONTH',
+    question:
+      'Will a Stress Event occur at least once within the next 20 trading days?',
+    strongest: false,
+  },
+];
+
+const horizonPerformance = [
+  {
+    horizon: '1D',
+    logisticRoc: 0.9886,
+    xgbRoc: 0.9844,
+    logisticPr: 0.9247,
+    xgbPr: 0.9001,
+    strongest: true,
+  },
+  {
+    horizon: '5D',
+    logisticRoc: 0.9611,
+    xgbRoc: 0.9498,
+    logisticPr: 0.8557,
+    xgbPr: 0.8337,
+    strongest: false,
+  },
+  {
+    horizon: '10D',
+    logisticRoc: 0.9220,
+    xgbRoc: 0.8991,
+    logisticPr: 0.8065,
+    xgbPr: 0.7778,
+    strongest: false,
+  },
+  {
+    horizon: '20D',
+    logisticRoc: 0.8555,
+    xgbRoc: 0.8138,
+    logisticPr: 0.7320,
+    xgbPr: 0.7099,
+    strongest: false,
+  },
+];
+
+const horizonDefinitions = [
+  {
+    horizon: '1D',
+    period: 'NEXT TRADING DAY',
+    question: 'Will a market Stress Event occur on the next trading day?',
+    strongest: true,
+  },
+  {
+    horizon: '5D',
+    period: '≈ 1 TRADING WEEK',
+    question:
+      'Will a Stress Event occur at least once within the next 5 trading days?',
+    strongest: false,
+  },
+  {
+    horizon: '10D',
+    period: '≈ 2 TRADING WEEKS',
+    question:
+      'Will a Stress Event occur at least once within the next 10 trading days?',
+    strongest: false,
+  },
+  {
+    horizon: '20D',
+    period: '≈ 1 TRADING MONTH',
+    question:
+      'Will a Stress Event occur at least once within the next 20 trading days?',
+    strongest: false,
+  },
+];
+
+const horizonPerformance = [
+  {
+    horizon: '1D',
+    logisticRoc: 0.9886,
+    xgbRoc: 0.9844,
+    logisticPr: 0.9247,
+    xgbPr: 0.9001,
+    strongest: true,
+  },
+  {
+    horizon: '5D',
+    logisticRoc: 0.9611,
+    xgbRoc: 0.9498,
+    logisticPr: 0.8557,
+    xgbPr: 0.8337,
+    strongest: false,
+  },
+  {
+    horizon: '10D',
+    logisticRoc: 0.9220,
+    xgbRoc: 0.8991,
+    logisticPr: 0.8065,
+    xgbPr: 0.7778,
+    strongest: false,
+  },
+  {
+    horizon: '20D',
+    logisticRoc: 0.8555,
+    xgbRoc: 0.8138,
+    logisticPr: 0.7320,
+    xgbPr: 0.7099,
+    strongest: false,
+  },
+];
+
+const horizonDefinitions = [
+  {
+    horizon: '1D',
+    period: 'NEXT TRADING DAY',
+    question: 'Will a market Stress Event occur on the next trading day?',
+    strongest: true,
+  },
+  {
+    horizon: '5D',
+    period: '≈ 1 TRADING WEEK',
+    question:
+      'Will a Stress Event occur at least once within the next 5 trading days?',
+    strongest: false,
+  },
+  {
+    horizon: '10D',
+    period: '≈ 2 TRADING WEEKS',
+    question:
+      'Will a Stress Event occur at least once within the next 10 trading days?',
+    strongest: false,
+  },
+  {
+    horizon: '20D',
+    period: '≈ 1 TRADING MONTH',
+    question:
+      'Will a Stress Event occur at least once within the next 20 trading days?',
+    strongest: false,
+  },
+];
+
+const horizonPerformance = [
+  {
+    horizon: '1D',
+    logisticRoc: 0.9886,
+    xgbRoc: 0.9844,
+    logisticPr: 0.9247,
+    xgbPr: 0.9001,
+    strongest: true,
+  },
+  {
+    horizon: '5D',
+    logisticRoc: 0.9611,
+    xgbRoc: 0.9498,
+    logisticPr: 0.8557,
+    xgbPr: 0.8337,
+    strongest: false,
+  },
+  {
+    horizon: '10D',
+    logisticRoc: 0.9220,
+    xgbRoc: 0.8991,
+    logisticPr: 0.8065,
+    xgbPr: 0.7778,
+    strongest: false,
+  },
+  {
+    horizon: '20D',
+    logisticRoc: 0.8555,
+    xgbRoc: 0.8138,
+    logisticPr: 0.7320,
+    xgbPr: 0.7099,
+    strongest: false,
+  },
+];
+
+const horizonDefinitions = [
+  {
+    horizon: '1D',
+    period: 'NEXT TRADING DAY',
+    question: 'Will a market Stress Event occur on the next trading day?',
+    strongest: true,
+  },
+  {
+    horizon: '5D',
+    period: '≈ 1 TRADING WEEK',
+    question:
+      'Will a Stress Event occur at least once within the next 5 trading days?',
+    strongest: false,
+  },
+  {
+    horizon: '10D',
+    period: '≈ 2 TRADING WEEKS',
+    question:
+      'Will a Stress Event occur at least once within the next 10 trading days?',
+    strongest: false,
+  },
+  {
+    horizon: '20D',
+    period: '≈ 1 TRADING MONTH',
+    question:
+      'Will a Stress Event occur at least once within the next 20 trading days?',
+    strongest: false,
+  },
+];
+const horizonPerformance = [
+  {
+    horizon: '1D',
+    logisticRoc: 0.9886,
+    xgbRoc: 0.9844,
+    logisticPr: 0.9247,
+    xgbPr: 0.9001,
+    strongest: true,
+  },
+  {
+    horizon: '5D',
+    logisticRoc: 0.9611,
+    xgbRoc: 0.9498,
+    logisticPr: 0.8557,
+    xgbPr: 0.8337,
+    strongest: false,
+  },
+  {
+    horizon: '10D',
+    logisticRoc: 0.9220,
+    xgbRoc: 0.8991,
+    logisticPr: 0.8065,
+    xgbPr: 0.7778,
+    strongest: false,
+  },
+  {
+    horizon: '20D',
+    logisticRoc: 0.8555,
+    xgbRoc: 0.8138,
+    logisticPr: 0.7320,
+    xgbPr: 0.7099,
+    strongest: false,
+  },
+];
+
+const horizonDefinitions = [
+  {
+    horizon: '1D',
+    period: 'NEXT TRADING DAY',
+    question: 'Will a market Stress Event occur on the next trading day?',
+    strongest: true,
+  },
+  {
+    horizon: '5D',
+    period: '≈ 1 TRADING WEEK',
+    question:
+      'Will a Stress Event occur at least once within the next 5 trading days?',
+    strongest: false,
+  },
+  {
+    horizon: '10D',
+    period: '≈ 2 TRADING WEEKS',
+    question:
+      'Will a Stress Event occur at least once within the next 10 trading days?',
+    strongest: false,
+  },
+  {
+    horizon: '20D',
+    period: '≈ 1 TRADING MONTH',
+    question:
+      'Will a Stress Event occur at least once within the next 20 trading days?',
+    strongest: false,
+  },
+];
+
+const horizonPerformance = [
+  {
+    horizon: '1D',
+    logisticRoc: 0.9886,
+    xgbRoc: 0.9844,
+    logisticPr: 0.9247,
+    xgbPr: 0.9001,
+    strongest: true,
+  },
+  {
+    horizon: '5D',
+    logisticRoc: 0.9611,
+    xgbRoc: 0.9498,
+    logisticPr: 0.8557,
+    xgbPr: 0.8337,
+    strongest: false,
+  },
+  {
+    horizon: '10D',
+    logisticRoc: 0.9220,
+    xgbRoc: 0.8991,
+    logisticPr: 0.8065,
+    xgbPr: 0.7778,
+    strongest: false,
+  },
+  {
+    horizon: '20D',
+    logisticRoc: 0.8555,
+    xgbRoc: 0.8138,
+    logisticPr: 0.7320,
+    xgbPr: 0.7099,
+    strongest: false,
+  },
+];
+
+const horizonDefinitions = [
+  {
+    horizon: '1D',
+    period: 'NEXT TRADING DAY',
+    question: 'Will a market Stress Event occur on the next trading day?',
+    strongest: true,
+  },
+  {
+    horizon: '5D',
+    period: '≈ 1 TRADING WEEK',
+    question:
+      'Will a Stress Event occur at least once within the next 5 trading days?',
+    strongest: false,
+  },
+  {
+    horizon: '10D',
+    period: '≈ 2 TRADING WEEKS',
+    question:
+      'Will a Stress Event occur at least once within the next 10 trading days?',
+    strongest: false,
+  },
+  {
+    horizon: '20D',
+    period: '≈ 1 TRADING MONTH',
+    question:
+      'Will a Stress Event occur at least once within the next 20 trading days?',
+    strongest: false,
+  },
+];
+
 export default function ModelValidationPage() {
 
   const [metrics, setMetrics] = useState<MetricRow[]>([]);
@@ -198,8 +587,8 @@ export default function ModelValidationPage() {
         </h1>
 
         <p className="text-xs text-gray-400 mt-1">
-          Purged walk-forward out-of-sample validation with horizon-specific
-          label-overlap gaps.
+          Purged walk-forward out-of-sample validation with a 10-trading-day
+          label-overlap gap.
         </p>
       </div>
       {/* Multi-Horizon Forecast Definition */}
@@ -275,253 +664,15 @@ export default function ModelValidationPage() {
           their respective forward windows.
         </div>
       </div>
-      {/* Multi-Horizon OOS Performance */}
-      <div className="bg-dark-card border border-dark-border p-6 rounded-lg space-y-6">
-        <div className="flex flex-col md:flex-row md:items-start md:justify-between gap-3">
-          <div>
-            <h3 className="text-sm font-bold text-gray-200 tracking-wider">
-              MULTI-HORIZON OUT-OF-SAMPLE PERFORMANCE
-            </h3>
-            <p className="text-xs text-gray-500 mt-1">
-              Purged walk-forward OOS discrimination across four independently
-              trained forecast horizons.
-            </p>
-          </div>
 
-          <div className="text-[10px] font-mono text-financial-green border border-financial-green/40 rounded px-3 py-1.5">
-            BEST OOS DISCRIMINATION · 1D
-          </div>
-        </div>
-
-        {/* Performance Chart */}
-        <div className="h-[320px] bg-dark-bg border border-dark-border rounded-lg p-4">
-          <ResponsiveContainer width="100%" height="100%">
-            <LineChart
-              data={horizonPerformance}
-              margin={{ top: 15, right: 20, left: 0, bottom: 5 }}
-            >
-              <CartesianGrid
-                strokeDasharray="3 3"
-                stroke="#26303d"
-                vertical={false}
-              />
-
-              <XAxis
-                dataKey="horizon"
-                stroke="#6b7280"
-                tick={{ fontSize: 11 }}
-              />
-
-              <YAxis
-                domain={[0.65, 1]}
-                stroke="#6b7280"
-                tick={{ fontSize: 11 }}
-                tickFormatter={(value) => value.toFixed(2)}
-              />
-
-              <Tooltip
-                contentStyle={{
-                  backgroundColor: '#0b0f14',
-                  border: '1px solid #26303d',
-                  borderRadius: '6px',
-                  fontSize: '11px',
-                }}
-                formatter={(value: number) => value.toFixed(4)}
-              />
-
-              <Line
-                type="monotone"
-                dataKey="logisticRoc"
-                name="Logistic ROC-AUC"
-                stroke="#22c55e"
-                strokeWidth={2.5}
-                dot={{ r: 4 }}
-                activeDot={{ r: 6 }}
-              />
-
-              <Line
-                type="monotone"
-                dataKey="xgbRoc"
-                name="XGBoost ROC-AUC"
-                stroke="#3b82f6"
-                strokeWidth={2.5}
-                dot={{ r: 4 }}
-                activeDot={{ r: 6 }}
-              />
-
-              <Line
-                type="monotone"
-                dataKey="logisticPr"
-                name="Logistic PR-AUC"
-                stroke="#a855f7"
-                strokeWidth={2}
-                strokeDasharray="5 4"
-                dot={{ r: 3 }}
-              />
-
-              <Line
-                type="monotone"
-                dataKey="xgbPr"
-                name="XGBoost PR-AUC"
-                stroke="#f59e0b"
-                strokeWidth={2}
-                strokeDasharray="5 4"
-                dot={{ r: 3 }}
-              />
-            </LineChart>
-          </ResponsiveContainer>
-        </div>
-
-        <div className="flex flex-wrap gap-x-6 gap-y-2 text-[10px] font-mono text-gray-400">
-          <span>
-            <span className="text-green-400">●</span> Logistic ROC-AUC
-          </span>
-          <span>
-            <span className="text-blue-400">●</span> XGBoost ROC-AUC
-          </span>
-          <span>
-            <span className="text-purple-400">●</span> Logistic PR-AUC
-          </span>
-          <span>
-            <span className="text-amber-400">●</span> XGBoost PR-AUC
-          </span>
-        </div>
-
-        {/* Exact Performance Table */}
-        <div className="overflow-x-auto">
-          <table className="w-full text-left border-collapse text-xs font-mono">
-            <thead>
-              <tr className="border-b border-dark-border bg-dark-bg text-gray-400">
-                <th className="p-3">HORIZON</th>
-                <th className="p-3">LOGISTIC ROC</th>
-                <th className="p-3">XGB ROC</th>
-                <th className="p-3">LOGISTIC PR</th>
-                <th className="p-3">XGB PR</th>
-              </tr>
-            </thead>
-
-            <tbody>
-              {horizonPerformance.map((row) => (
-                <tr
-                  key={row.horizon}
-                  className={`border-b border-dark-border ${
-                    row.strongest ? 'bg-emerald-500/5' : ''
-                  }`}
-                >
-                  <td className="p-3">
-                    <div className="flex items-center gap-2">
-                      <span
-                        className={`font-bold ${
-                          row.strongest
-                            ? 'text-financial-green'
-                            : 'text-white'
-                        }`}
-                      >
-                        {row.horizon}
-                      </span>
-
-                      {row.strongest && (
-                        <span className="text-[9px] text-financial-green border border-financial-green/40 rounded px-1.5 py-0.5">
-                          STRONGEST
-                        </span>
-                      )}
-                    </div>
-                  </td>
-
-                  <td className="p-3 text-green-400 font-bold">
-                    {row.logisticRoc.toFixed(4)}
-                  </td>
-                  <td className="p-3 text-blue-400">
-                    {row.xgbRoc.toFixed(4)}
-                  </td>
-                  <td className="p-3 text-purple-400 font-bold">
-                    {row.logisticPr.toFixed(4)}
-                  </td>
-                  <td className="p-3 text-amber-400">
-                    {row.xgbPr.toFixed(4)}
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-
-        {/* Key Findings */}
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
-          <div className="bg-dark-bg border border-financial-green/40 rounded-lg p-4">
-            <div className="text-[10px] tracking-wider text-financial-green font-bold">
-              STRONGEST HORIZON
-            </div>
-            <div className="text-2xl text-white font-bold font-mono mt-2">
-              1 DAY
-            </div>
-            <div className="text-xs text-gray-400 mt-2 leading-relaxed">
-              Logistic ROC-AUC 0.9886 and PR-AUC 0.9247 — the strongest
-              out-of-sample discrimination among the four tested horizons.
-            </div>
-          </div>
-
-          <div className="bg-dark-bg border border-dark-border rounded-lg p-4">
-            <div className="text-[10px] tracking-wider text-financial-blue font-bold">
-              EARLY-WARNING REACH
-            </div>
-            <div className="text-2xl text-white font-bold font-mono mt-2">
-              UP TO 20 DAYS
-            </div>
-            <div className="text-xs text-gray-400 mt-2 leading-relaxed">
-              Logistic ROC-AUC remains 0.9220 at 10D and 0.8555 at 20D,
-              indicating that useful ranking information remains detectable
-              beyond the immediate horizon.
-            </div>
-          </div>
-
-          <div className="bg-dark-bg border border-dark-border rounded-lg p-4">
-            <div className="text-[10px] tracking-wider text-purple-400 font-bold">
-              MODEL TRADE-OFF
-            </div>
-            <div className="text-lg text-white font-bold mt-2">
-              LOGISTIC vs XGBOOST
-            </div>
-            <div className="text-xs text-gray-400 mt-2 leading-relaxed">
-              Logistic provides stronger ROC/PR discrimination across all
-              horizons. XGBoost produces fewer false alarms at the fixed 0.50
-              threshold, but misses more stress events.
-            </div>
-          </div>
-        </div>
-
-       {/* Conclusion */}
-      <div className="border-l-2 border-financial-green bg-dark-bg px-5 py-4">
-        <div className="text-[10px] tracking-wider text-gray-500 font-bold">
-          CONCLUSION
-        </div>
-
-        <div className="mt-2">
-          <p className="text-sm text-white font-semibold leading-relaxed">
-            Near-term stress provides the strongest warning signal, while useful
-            predictive information remains detectable up to 20 trading days ahead.
-          </p>
-
-          <p className="text-xs text-gray-400 mt-2 leading-relaxed">
-            Logistic Regression provides stronger discrimination and event sensitivity,
-            while XGBoost offers a more conservative operating profile with fewer
-            false alarms.
-          </p>
-        </div>
-      </div>
-
-        <div className="text-[10px] text-gray-500 font-mono">
-          PURGED WALK-FORWARD OOS · 17 FEATURES · HORIZON-SPECIFIC PURGE · NO RANDOM SPLIT
-        </div>
-      </div>
       {/* Model Performance */}
       <div className="bg-dark-card border border-dark-border p-6 rounded-lg space-y-4">
         <div>
           <h3 className="text-sm font-bold text-gray-200 tracking-wider">
-            10-DAY DETAILED MODEL PERFORMANCE
+            OVERALL OUT-OF-SAMPLE PERFORMANCE
           </h3>
           <p className="text-xs text-gray-500 mt-1">
-            OOS period: 2006-08-09 — 2026-09-21
+            OOS period: 2006-08-09 — 2026-09-16
           </p>
         </div>
 

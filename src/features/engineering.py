@@ -261,7 +261,10 @@ class FeatureEngineer:
             "MSI",
             "Stress_Threshold",
             "Is_Stress_Event",
-            "Target_10D"
+            "Target_1D",
+            "Target_5D",
+            "Target_10D",
+            "Target_20D"
         ]
 
         targets = targets[target_cols]
@@ -283,11 +286,9 @@ class FeatureEngineer:
                 "Duplicate dates found in feature matrix."
             )
 
-        if final_df[
-            feature_cols + ["Target_10D"]
-        ].isna().any().any():
+        if final_df[feature_cols].isna().any().any():
             raise ValueError(
-                "Missing values remain in final feature matrix."
+                "Missing values remain in ML features."
             )
 
         logger.info(

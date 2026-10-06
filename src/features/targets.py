@@ -24,7 +24,8 @@ class TargetGenerator:
     ):
         self.input_path = DATA_FEATURES_DIR / input_filename
         self.output_path = DATA_FEATURES_DIR / output_filename
-        self.target_window = TARGET_WINDOW_DAYS
+        self.target_windows = [1, 5, 10, 20]
+        
 
     def generate_targets(self):
         """
@@ -80,42 +81,44 @@ class TargetGenerator:
             np.nan
         )
 
-        # --------------------------------------------------
-        # 3. Forward N-day Target 생성
-        # --------------------------------------------------
-
-        logger.info(
-            f"Generating {self.target_window}-day forward targets..."
-        )
-
-        target_col = f"Target_{self.target_window}D"
-
-        # t+1, t+2, ... t+N의 Stress Event를 명시적으로 생성
-        future_events = pd.concat(
-            [
-                df["Is_Stress_Event"].shift(-i)
-                for i in range(1, self.target_window + 1)
-            ],
-            axis=1
-        )
-
-        # 향후 N거래일 중 하나라도 stress event이면 Target = 1
-        df[target_col] = future_events.max(
-            axis=1,
-            skipna=False
-        )
-
-        # --------------------------------------------------
-        # 4. 학습 가능한 라벨만 유지
+               # --------------------------------------------------
+        # 3. Multi-Horizon Forward Targets
         # --------------------------------------------------
 
-        # 초기 threshold 미정 구간과
-        # 마지막 N거래일처럼 미래 관측이 부족한 구간 제거
+        target_cols = []
+
+        for horizon in self.target_windows:
+            target_col = f"Target_{horizon}D"
+            target_cols.append(target_col)
+
+            logger.info(
+                f"Generating {horizon}-day forward targets..."
+            )
+
+            future_events = pd.concat(
+                [
+                    df["Is_Stress_Event"].shift(-i)
+                    for i in range(1, horizon + 1)
+                ],
+                axis=1
+            )
+
+            df[target_col] = future_events.max(
+                axis=1,
+                skipna=False
+            )
+
+        # --------------------------------------------------
+        # 4. 기본 유효 구간 유지
+        # --------------------------------------------------
+
+        # 초기 threshold 미정 구간만 제거.
+        # 각 horizon 끝부분의 NaN은 그대로 유지해서
+        # 모델별로 사용 가능한 label만 선택하도록 한다.
         df.dropna(
             subset=[
                 "Stress_Threshold",
                 "Is_Stress_Event",
-                target_col
             ],
             inplace=True
         )
@@ -124,11 +127,10 @@ class TargetGenerator:
             df["Is_Stress_Event"].astype(int)
         )
 
-        df[target_col] = (
-            df[target_col].astype(int)
-        )
-
-        # --------------------------------------------------
+        for target_col in target_cols:
+            df[target_col] = df[target_col].astype("Int64")
+            
+                # --------------------------------------------------
         # 5. QA
         # --------------------------------------------------
 
@@ -137,15 +139,15 @@ class TargetGenerator:
             f"{df['Is_Stress_Event'].sum()} days"
         )
 
-        logger.info(
-            f"Positive Targets (1): "
-            f"{df[target_col].sum()} days out of {len(df)}"
-        )
+        for target_col in target_cols:
+            valid = df[target_col].dropna()
 
-        logger.info(
-            f"Positive Target Rate: "
-            f"{df[target_col].mean():.2%}"
-        )
+            logger.info(
+                f"{target_col}: "
+                f"{int(valid.sum())} positives / "
+                f"{len(valid)} observations "
+                f"({valid.mean():.2%})"
+            )
 
         logger.info(
             f"Target Dataset Start Date: {df.index.min()}"
@@ -154,8 +156,7 @@ class TargetGenerator:
         logger.info(
             f"Target Dataset End Date: {df.index.max()}"
         )
-
-        # --------------------------------------------------
+            # --------------------------------------------------
         # 6. 저장
         # --------------------------------------------------
 

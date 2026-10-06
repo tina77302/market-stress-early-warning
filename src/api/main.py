@@ -303,7 +303,30 @@ def get_historical_data(days: int = 1260):
         "count": len(chart_data),
         "data": chart_data,
     }
+@app.get("/api/multi-horizon-validation")
+def get_multi_horizon_validation():
+    """
+    Precomputed purged walk-forward OOS metrics
+    for 1D, 5D, 10D, and 20D forecast horizons.
+    """
 
+    path = DATA_PROCESSED_DIR / "multi_horizon_metrics.csv"
+
+    if not path.exists():
+        raise HTTPException(
+            status_code=404,
+            detail=(
+                "Multi-horizon validation metrics not found. "
+                "Run multi-horizon validation first."
+            ),
+        )
+
+    df = pd.read_csv(path)
+
+    return {
+        "count": len(df),
+        "data": df.to_dict(orient="records"),
+    }
 
 # ==================================================
 # PAGE 02 - Model Validation
@@ -316,7 +339,9 @@ def get_validation_metrics():
     historical event analysis.
     """
 
-    evaluator = ModelEvaluator()
+    evaluator = ModelEvaluator(
+     input_filename="oos_predictions_10d.csv"
+    )
 
     overall = (
         evaluator
