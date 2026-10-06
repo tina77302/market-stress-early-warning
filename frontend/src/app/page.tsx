@@ -46,10 +46,26 @@ interface HistoricalPoint {
   target: number;
 }
 
+interface ShapDriver {
+  feature: string;
+  feature_value: number;
+  shap_value: number;
+  direction: 'risk_up' | 'risk_down';
+}
+
+interface ShapData {
+  date: string;
+  model: string;
+  feature_count: number;
+  top_drivers: ShapDriver[];
+  interpretation_note: string;
+}
+
 
 export default function MarketRiskPage() {
   const [latest, setLatest] = useState<LatestData | null>(null);
   const [history, setHistory] = useState<HistoricalPoint[]>([]);
+  const [shapData, setShapData] = useState<ShapData | null>(null);
   const [loading, setLoading] = useState(true);
   const [apiError, setApiError] = useState(false);
   const [timeRange, setTimeRange] = useState<'1Y' | '3Y' | '5Y' | 'ALL'>('3Y');
@@ -77,20 +93,23 @@ export default function MarketRiskPage() {
   useEffect(() => {
     async function fetchData() {
       try {
-        const [resLatest, resHist] = await Promise.all([
+        const [resLatest, resHist, resShap] = await Promise.all([
           fetch(`${API_URL}/api/latest`),
           fetch(`${API_URL}/api/historical?days=10000`),
+          fetch(`${API_URL}/api/shap`),
         ]);
 
-        if (!resLatest.ok || !resHist.ok) {
+        if (!resLatest.ok || !resHist.ok || !resShap.ok) {
           throw new Error('API request failed');
         }
 
         const dataLatest = await resLatest.json();
         const dataHist = await resHist.json();
+        const dataShap = await resShap.json();
 
         setLatest(dataLatest);
         setHistory(dataHist.data);
+        setShapData(dataShap);
         setApiError(false);
       } catch (err) {
         console.error('API connection failed', err);
@@ -102,6 +121,34 @@ export default function MarketRiskPage() {
 
     fetchData();
   }, []);
+
+
+  const featureLabel = (feature: string) => {
+    const labels: Record<string, string> = {
+      VIX_252D_ZScore: 'VIX Relative Level',
+      Credit_252D_ZScore: 'Credit Spread Relative Level',
+      SPY_Drawdown: 'SPY Drawdown',
+      SPY_20D_Vol: 'SPY 20D Volatility',
+      Credit_Level: 'Credit Spread Level',
+      SPY_20D_Momentum: 'SPY 20D Momentum',
+      SPY_20D_Return: 'SPY 20D Return',
+      Credit_20D_Momentum: 'Credit Spread Momentum',
+      SPY_60D_Vol: 'SPY 60D Volatility',
+      VIX_20D_Momentum: 'VIX 20D Momentum',
+    };
+
+    return labels[feature] ?? feature.replaceAll('_', ' ');
+  };
+
+  const riskIncreasing =
+    shapData?.top_drivers.filter(
+      (driver) => driver.direction === 'risk_up'
+    ) ?? [];
+
+  const riskReducing =
+    shapData?.top_drivers.filter(
+      (driver) => driver.direction === 'risk_down'
+    ) ?? [];
 
 
   if (loading) {
@@ -410,6 +457,108 @@ export default function MarketRiskPage() {
 
           </div>
 
+        </div>
+
+      </div>
+
+
+      {/* ==================================================
+          Model Risk Drivers - SHAP
+      ================================================== */}
+
+      <div className="bg-dark-card border border-dark-border p-6 rounded-lg space-y-5">
+
+        <div className="flex flex-col md:flex-row md:items-center justify-between gap-2">
+          <div>
+            <h3 className="text-sm font-bold text-gray-200 tracking-wider">
+              MODEL RISK DRIVERS
+            </h3>
+
+            <p className="text-xs text-gray-500 mt-1">
+              Latest XGBoost explanation using SHAP
+            </p>
+          </div>
+
+          <div className="text-[11px] font-mono text-gray-500">
+            {shapData
+              ? `${shapData.date} · ${shapData.feature_count} FEATURES`
+              : 'SHAP DATA UNAVAILABLE'}
+          </div>
+        </div>
+
+
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+
+          <div className="border border-dark-border rounded-lg p-4">
+            <div className="text-[11px] font-semibold tracking-wider text-financial-red mb-4">
+              RISK INCREASING
+            </div>
+
+            <div className="space-y-3">
+              {riskIncreasing.length > 0 ? (
+                riskIncreasing.map((driver) => (
+                  <div
+                    key={driver.feature}
+                    className="flex items-center justify-between gap-4"
+                  >
+                    <span className="text-xs text-gray-300">
+                      {featureLabel(driver.feature)}
+                    </span>
+
+                    <span className="text-xs font-mono text-financial-red">
+                      ↑
+                    </span>
+                  </div>
+                ))
+              ) : (
+                <div className="text-xs text-gray-500">
+                  No increasing drivers among the leading SHAP factors.
+                </div>
+              )}
+            </div>
+          </div>
+
+
+          <div className="border border-dark-border rounded-lg p-4">
+            <div className="text-[11px] font-semibold tracking-wider text-emerald-400 mb-4">
+              RISK REDUCING
+            </div>
+
+            <div className="space-y-3">
+              {riskReducing.length > 0 ? (
+                riskReducing.map((driver) => (
+                  <div
+                    key={driver.feature}
+                    className="flex items-center justify-between gap-4"
+                  >
+                    <span className="text-xs text-gray-300">
+                      {featureLabel(driver.feature)}
+                    </span>
+
+                    <span className="text-xs font-mono text-emerald-400">
+                      ↓
+                    </span>
+                  </div>
+                ))
+              ) : (
+                <div className="text-xs text-gray-500">
+                  No reducing drivers among the leading SHAP factors.
+                </div>
+              )}
+            </div>
+          </div>
+
+        </div>
+
+
+        <div className="flex items-start gap-2 text-[11px] leading-relaxed text-gray-500">
+          <Database className="w-3.5 h-3.5 mt-0.5 shrink-0" />
+
+          <span>
+            SHAP explains the direction and relative contribution of each
+            feature to the latest XGBoost risk score. Contributions are
+            model-output effects, not percentage-point changes in event probability.
+          </span>
         </div>
 
       </div>

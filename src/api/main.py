@@ -1,3 +1,4 @@
+import json
 import pandas as pd
 import joblib
 
@@ -347,3 +348,52 @@ if __name__ == "__main__":
         host="127.0.0.1",
         port=8000,
     )
+
+# ==================================================
+# PAGE 01 - SHAP Risk Drivers
+# ==================================================
+
+@app.get("/api/shap")
+def get_shap_drivers():
+    """
+    Latest XGBoost SHAP explanation.
+
+    Positive SHAP values increase the model output;
+    negative SHAP values decrease it.
+
+    SHAP values are model-output contributions,
+    not percentage-point changes in event probability.
+    """
+
+    path = (
+        DATA_FEATURES_DIR
+        / "shap"
+        / "latest_shap.json"
+    )
+
+    if not path.exists():
+        raise HTTPException(
+            status_code=404,
+            detail=(
+                "Latest SHAP explanation not found. "
+                "Run SHAP analysis first."
+            ),
+        )
+
+    try:
+        with open(path, "r") as f:
+            payload = json.load(f)
+    except Exception as exc:
+        raise HTTPException(
+            status_code=500,
+            detail=f"Failed to load SHAP explanation: {exc}",
+        )
+
+    return {
+        **payload,
+        "interpretation_note": (
+            "Positive SHAP values push the model risk score "
+            "higher and negative values push it lower. "
+            "SHAP values are not probability-point changes."
+        ),
+    }

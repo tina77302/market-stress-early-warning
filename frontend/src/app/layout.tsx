@@ -1,7 +1,7 @@
 import './globals.css';
 import React from 'react';
 import Link from 'next/link';
-import { ShieldAlert, BarChart3, Activity } from 'lucide-react';
+import { ShieldAlert, BarChart3, Activity, FlaskConical } from 'lucide-react';
 
 export const metadata = {
   title: 'Market Risk Intelligence - U.S. Stress Early Warning',
@@ -42,6 +42,13 @@ export default function RootLayout({
             >
               <BarChart3 className="w-4 h-4 text-financial-green" />
               <span>PAGE 02 — Model Validation</span>
+            </Link>
+            <Link
+              href="/methodology"
+              className="flex items-center space-x-2 text-gray-300 hover:text-white transition-colors"
+            >
+              <FlaskConical className="w-4 h-4 text-financial-amber" />
+              <span>PAGE 03 — Methodology</span>
             </Link>
           </nav>
         </header>
