@@ -7,6 +7,7 @@ import {
   LineChart,
   Area,
   Line,
+  Bar,
   XAxis,
   YAxis,
   CartesianGrid,
@@ -65,40 +66,26 @@ const pct = (value: number | undefined, digits = 1) =>
   typeof value === 'number' && Number.isFinite(value)
     ? `${(value * 100).toFixed(digits)}`
     : '—';
-const horizonPerformance = [
-  {
-    horizon: '1D',
-    logisticRoc: 0.9886,
-    xgbRoc: 0.9844,
-    logisticPr: 0.9247,
-    xgbPr: 0.9001,
-    strongest: true,
-  },
-  {
-    horizon: '5D',
-    logisticRoc: 0.9611,
-    xgbRoc: 0.9498,
-    logisticPr: 0.8557,
-    xgbPr: 0.8337,
-    strongest: false,
-  },
-  {
-    horizon: '10D',
-    logisticRoc: 0.9220,
-    xgbRoc: 0.8991,
-    logisticPr: 0.8065,
-    xgbPr: 0.7778,
-    strongest: false,
-  },
-  {
-    horizon: '20D',
-    logisticRoc: 0.8555,
-    xgbRoc: 0.8138,
-    logisticPr: 0.7320,
-    xgbPr: 0.7099,
-    strongest: false,
-  },
-];
+interface MultiHorizonApiRow {
+  Horizon: string;
+  Model: string;
+  OOS_Observations: number;
+  Positive_Rate: number;
+  ROC_AUC: number;
+  PR_AUC: number;
+  Brier: number;
+  'Precision_0.5': number;
+  'Recall_0.5': number;
+  'F1_0.5': number;
+  'FAR_0.5': number;
+  'Missed_Rate_0.5': number;
+  TP: number;
+  FP: number;
+  TN: number;
+  FN: number;
+  OOS_Start: string;
+  OOS_End: string;
+}
 
 const horizonDefinitions = [
   {
@@ -129,11 +116,104 @@ const horizonDefinitions = [
     strongest: false,
   },
 ];
+const earlyWarningData = [
+  {
+    window: '20–11D',
+    label: 'EARLY SIGNAL',
+    logistic: 69.0,
+    xgboost: 48.3,
+    description: 'Exploratory pre-stress signal',
+  },
+  {
+    window: '10–6D',
+    label: 'RISK BUILD-UP',
+    logistic: 72.4,
+    xgboost: 62.1,
+    description: 'Risk signal becomes more frequent',
+  },
+  {
+    window: '5–1D',
+    label: 'IMMINENT WARNING',
+    logistic: 100.0,
+    xgboost: 86.2,
+    description: 'Historical OOS stress episodes with ≥1 warning',
+  },
+];
+
+const warningPersistence = [
+  {
+    duration: '1+ DAYS',
+    precision: 38.0,
+  },
+  {
+    duration: '2+ DAYS',
+    precision: 48.2,
+  },
+  {
+    duration: '3+ DAYS',
+    precision: 57.1,
+  },
+];
+
+const signalImportance = [
+  {
+    signal: 'VIX Relative Level',
+    technical: 'VIX_252D_ZScore',
+    logistic: 0.030058,
+    xgboost: 0.055981,
+  },
+  {
+    signal: 'Credit Spread Relative Level',
+    technical: 'Credit_252D_ZScore',
+    logistic: 0.019533,
+    xgboost: 0.018851,
+  },
+  {
+    signal: 'SPY Drawdown',
+    technical: 'SPY_Drawdown',
+    logistic: 0.013852,
+    xgboost: -0.003830,
+  },
+  {
+    signal: 'SPY 20D Volatility',
+    technical: 'SPY_20D_Vol',
+    logistic: 0.006462,
+    xgboost: -0.000791,
+  },
+  {
+    signal: 'SPY 20D Momentum',
+    technical: 'SPY_20D_Momentum',
+    logistic: 0.002570,
+    xgboost: 0.000925,
+  },
+];
+
 export default function ModelValidationPage() {
 
   const [metrics, setMetrics] = useState<MetricRow[]>([]);
   const [events, setEvents] = useState<EventRow[]>([]);
   const [history, setHistory] = useState<HistoricalRow[]>([]);
+  const [multiHorizon, setMultiHorizon] =
+    useState<MultiHorizonApiRow[]>([]);
+
+  const horizonPerformance = ['1D', '5D', '10D', '20D'].map((horizon) => {
+    const logistic = multiHorizon.find(
+      (row) => row.Horizon === horizon && row.Model === 'Logistic'
+    );
+
+    const xgb = multiHorizon.find(
+      (row) => row.Horizon === horizon && row.Model === 'XGBoost'
+    );
+
+    return {
+      horizon,
+      logisticRoc: logistic?.ROC_AUC ?? 0,
+      xgbRoc: xgb?.ROC_AUC ?? 0,
+      logisticPr: logistic?.PR_AUC ?? 0,
+      xgbPr: xgb?.PR_AUC ?? 0,
+      strongest: horizon === '1D',
+    };
+  });
   const [selectedEvent, setSelectedEvent] =
    useState<string>('2008 Financial Crisis');
 
@@ -150,6 +230,18 @@ export default function ModelValidationPage() {
 
         setMetrics(data.overall_metrics ?? []);
         setEvents(data.historical_events ?? []);
+              const multiRes = await fetch(
+        `${API_URL}/api/multi-horizon-validation`
+      );
+
+      if (!multiRes.ok) {
+        throw new Error(
+          `Multi-horizon API returned ${multiRes.status}`
+        );
+      }
+
+      const multiData = await multiRes.json();
+      setMultiHorizon(multiData.data ?? []);
       } catch (err) {
         console.error('Failed to fetch validation metrics:', err);
       }
@@ -514,6 +606,349 @@ export default function ModelValidationPage() {
           PURGED WALK-FORWARD OOS · 17 FEATURES · HORIZON-SPECIFIC PURGE · NO RANDOM SPLIT
         </div>
       </div>
+            {/* Early Warning Analysis */}
+      <div className="bg-dark-card border border-dark-border p-6 rounded-lg space-y-6">
+        <div>
+          <div className="flex flex-wrap items-center gap-2">
+            <h3 className="text-sm font-bold text-gray-200 tracking-wider">
+              HOW EARLY DOES IT WARN?
+            </h3>
+
+            <span className="text-[10px] font-mono text-gray-500 border border-dark-border rounded px-2 py-1">
+              OOS PRE-STRESS ANALYSIS
+            </span>
+          </div>
+
+          <p className="text-xs text-gray-500 mt-2 max-w-3xl leading-relaxed">
+            How often did the models show a warning before a broad U.S.
+            market Stress Event began?
+          </p>
+        </div>
+
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+          {earlyWarningData.map((item, index) => (
+            <div
+              key={item.window}
+              className={`bg-dark-bg border rounded-lg p-5 ${
+                index === 2
+                  ? 'border-financial-green/50'
+                  : 'border-dark-border'
+              }`}
+            >
+              <div className="flex items-start justify-between gap-3">
+                <div>
+                  <div className="text-[10px] font-bold tracking-wider text-gray-500">
+                    {item.label}
+                  </div>
+
+                  <div className="text-2xl font-bold font-mono text-white mt-1">
+                    {item.window}
+                  </div>
+                </div>
+
+                {index === 2 && (
+                  <span className="text-[9px] text-financial-green border border-financial-green/40 rounded px-2 py-1">
+                    STRONGEST
+                  </span>
+                )}
+              </div>
+
+              <div className="mt-5 space-y-4">
+                <div>
+                  <div className="flex justify-between text-[11px] mb-1">
+                    <span className="text-gray-400">Logistic</span>
+                    <span className="font-mono font-bold text-green-400">
+                      {item.logistic.toFixed(1)}%
+                    </span>
+                  </div>
+
+                  <div className="h-1.5 bg-gray-800 rounded-full overflow-hidden">
+                    <div
+                      className="h-full bg-green-500 rounded-full"
+                      style={{ width: `${item.logistic}%` }}
+                    />
+                  </div>
+                </div>
+
+                <div>
+                  <div className="flex justify-between text-[11px] mb-1">
+                    <span className="text-gray-400">XGBoost</span>
+                    <span className="font-mono font-bold text-blue-400">
+                      {item.xgboost.toFixed(1)}%
+                    </span>
+                  </div>
+
+                  <div className="h-1.5 bg-gray-800 rounded-full overflow-hidden">
+                    <div
+                      className="h-full bg-blue-500 rounded-full"
+                      style={{ width: `${item.xgboost}%` }}
+                    />
+                  </div>
+                </div>
+              </div>
+
+              <p className="text-[11px] text-gray-500 mt-4 leading-relaxed">
+                {item.description}
+              </p>
+            </div>
+          ))}
+        </div>
+
+        <div className="border-l-2 border-financial-amber bg-dark-bg px-5 py-4">
+          <div className="text-[10px] tracking-wider text-financial-amber font-bold">
+            EARLY WARNING DOES NOT MEAN A STRESS EVENT IS CERTAIN
+          </div>
+
+          <p className="text-xs text-gray-400 mt-2 leading-relaxed">
+            Some early warnings are false alarms. The 20–11D result is
+            exploratory because it extends beyond the primary 10-day
+            model&apos;s intended forecast horizon.
+          </p>
+        </div>
+      </div>
+
+            {/* Warning Persistence */}
+      <div className="bg-dark-card border border-dark-border p-6 rounded-lg space-y-6">
+        <div>
+          <h3 className="text-sm font-bold text-gray-200 tracking-wider">
+            WHEN DOES A WARNING BECOME MORE RELIABLE?
+          </h3>
+
+          <p className="text-xs text-gray-500 mt-2">
+            XGBoost warnings became more informative when elevated risk
+            persisted across multiple trading days.
+          </p>
+        </div>
+
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+          {warningPersistence.map((item, index) => (
+            <div
+              key={item.duration}
+              className={`bg-dark-bg border rounded-lg p-5 ${
+                index === 2
+                  ? 'border-financial-green/50'
+                  : 'border-dark-border'
+              }`}
+            >
+              <div className="text-[10px] tracking-wider text-gray-500">
+                WARNING PERSISTENCE
+              </div>
+
+              <div className="text-lg font-bold text-white mt-1">
+                {item.duration}
+              </div>
+
+              <div className="text-3xl font-bold font-mono text-financial-green mt-4">
+                {item.precision.toFixed(1)}%
+              </div>
+
+              <p className="text-[11px] text-gray-500 mt-2 leading-relaxed">
+                of these warning episodes were followed by broad-market stress
+                within the next 20 trading days
+              </p>
+            </div>
+          ))}
+        </div>
+
+        <div className="border-l-2 border-financial-green bg-dark-bg px-5 py-4">
+          <div className="text-[10px] tracking-wider text-gray-500 font-bold">
+            KEY TAKEAWAY
+          </div>
+
+          <p className="text-sm text-white font-semibold mt-2">
+            Persistent warnings were more reliable than one-day warning signals.
+          </p>
+
+          <p className="text-xs text-gray-400 mt-2 leading-relaxed">
+            For XGBoost, the share of warning episodes followed by broad-market
+            stress within 20 trading days increased from 38.0% for all warnings
+            to 57.1% when the warning persisted for at least three trading days.
+          </p>
+        </div>
+
+        <div className="text-[10px] text-gray-500 border-t border-dark-border pt-4 leading-relaxed">
+          Warning episodes are anchored to the first day the OOS Risk Score
+          crosses 0.50. The 20-day follow-up is an exploratory warning-reliability
+          analysis and should not be interpreted as a 20-day forecast from the
+          10-day model.
+        </div>
+      </div>
+      
+            {/* OOS Signal Importance */}
+      <div className="bg-dark-card border border-dark-border p-6 rounded-lg space-y-6">
+        <div className="flex flex-col md:flex-row md:items-start md:justify-between gap-3">
+          <div>
+            <h3 className="text-sm font-bold text-gray-200 tracking-wider">
+              WHICH SIGNALS MATTER MOST?
+            </h3>
+
+            <p className="text-xs text-gray-500 mt-2 max-w-3xl leading-relaxed">
+              Each signal was removed one at a time and the full purged
+              walk-forward validation was rerun. A larger positive ΔPR-AUC means
+              performance deteriorated more when that signal was removed.
+            </p>
+          </div>
+
+          <span className="text-[10px] font-mono text-financial-green border border-financial-green/40 rounded px-3 py-1.5 whitespace-nowrap">
+            LOFO · 10D OOS
+          </span>
+        </div>
+
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+          <div className="bg-dark-bg border border-financial-green/40 rounded-lg p-5">
+            <div className="text-[10px] tracking-wider text-financial-green font-bold">
+              #1 CONSISTENT SIGNAL
+            </div>
+
+            <div className="text-xl text-white font-bold mt-2">
+              VIX Relative Level
+            </div>
+
+            <p className="text-xs text-gray-400 mt-2 leading-relaxed">
+              How unusual current market volatility is compared with its own
+              recent history.
+            </p>
+
+            <div className="grid grid-cols-2 gap-3 mt-5">
+              <div>
+                <div className="text-[10px] text-gray-500">
+                  LOGISTIC ΔPR-AUC
+                </div>
+                <div className="font-mono text-lg font-bold text-green-400 mt-1">
+                  +0.0301
+                </div>
+              </div>
+
+              <div>
+                <div className="text-[10px] text-gray-500">
+                  XGBOOST ΔPR-AUC
+                </div>
+                <div className="font-mono text-lg font-bold text-blue-400 mt-1">
+                  +0.0560
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <div className="bg-dark-bg border border-dark-border rounded-lg p-5">
+            <div className="text-[10px] tracking-wider text-purple-400 font-bold">
+              #2 CONSISTENT SIGNAL
+            </div>
+
+            <div className="text-xl text-white font-bold mt-2">
+              Credit Spread Relative Level
+            </div>
+
+            <p className="text-xs text-gray-400 mt-2 leading-relaxed">
+              How unusual corporate-credit stress is compared with its own
+              recent history.
+            </p>
+
+            <div className="grid grid-cols-2 gap-3 mt-5">
+              <div>
+                <div className="text-[10px] text-gray-500">
+                  LOGISTIC ΔPR-AUC
+                </div>
+                <div className="font-mono text-lg font-bold text-green-400 mt-1">
+                  +0.0195
+                </div>
+              </div>
+
+              <div>
+                <div className="text-[10px] text-gray-500">
+                  XGBOOST ΔPR-AUC
+                </div>
+                <div className="font-mono text-lg font-bold text-blue-400 mt-1">
+                  +0.0189
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div className="h-[330px] bg-dark-bg border border-dark-border rounded-lg p-4">
+          <ResponsiveContainer width="100%" height="100%">
+            <ComposedChart
+              data={signalImportance}
+              layout="vertical"
+              margin={{ top: 10, right: 25, left: 35, bottom: 10 }}
+            >
+              <CartesianGrid
+                strokeDasharray="3 3"
+                stroke="#26303d"
+                horizontal={false}
+              />
+
+              <XAxis
+                type="number"
+                stroke="#6b7280"
+                tick={{ fontSize: 10 }}
+                tickFormatter={(value) => value.toFixed(2)}
+              />
+
+              <YAxis
+                type="category"
+                dataKey="signal"
+                width={155}
+                stroke="#6b7280"
+                tick={{ fontSize: 10 }}
+              />
+
+              <Tooltip
+                contentStyle={{
+                  backgroundColor: '#0b0f14',
+                  border: '1px solid #26303d',
+                  borderRadius: '6px',
+                  fontSize: '11px',
+                }}
+                formatter={(value: number) => value.toFixed(4)}
+              />
+
+              <ReferenceLine x={0} stroke="#6b7280" />
+
+              <Bar
+                dataKey="logistic"
+                name="Logistic ΔPR-AUC"
+                fill="#22c55e"
+                barSize={8}
+              />
+
+              <Bar
+                dataKey="xgboost"
+                name="XGBoost ΔPR-AUC"
+                fill="#3b82f6"
+                barSize={8}
+              />
+            </ComposedChart>
+          </ResponsiveContainer>
+        </div>
+
+        <div className="border-l-2 border-financial-green bg-dark-bg px-5 py-4">
+          <div className="text-[10px] tracking-wider text-gray-500 font-bold">
+            WHAT DID THE MODEL LEARN?
+          </div>
+
+          <p className="text-sm text-white font-semibold mt-2 leading-relaxed">
+            Relative volatility and credit stress provided the most consistent
+            unique out-of-sample predictive information.
+          </p>
+
+          <p className="text-xs text-gray-400 mt-2 leading-relaxed">
+            In simple terms, the model benefits more from knowing how unusual
+            current VIX and credit conditions are relative to their recent
+            history than from relying only on their absolute levels.
+          </p>
+        </div>
+
+        <div className="text-[10px] text-gray-500 leading-relaxed border-t border-dark-border pt-4">
+          LOFO measures incremental predictive contribution conditional on the
+          other 16 signals. Negative or near-zero values may reflect overlapping
+          information rather than an intrinsically uninformative variable. This
+          is a diagnostic analysis, not causal importance or post-hoc feature
+          selection. The Core 17-feature specification remains unchanged.
+        </div>
+      </div>
+
       {/* Model Performance */}
       <div className="bg-dark-card border border-dark-border p-6 rounded-lg space-y-4">
         <div>
@@ -663,7 +1098,7 @@ export default function ModelValidationPage() {
 
               <div className="bg-dark-bg border border-dark-border p-4 rounded">
                 <span className="text-xs text-gray-500 uppercase">
-                  Actual Stress Days
+                  10D Stress-Window Days
                 </span>
 
                 <p className="text-lg font-bold font-mono text-white mt-2">

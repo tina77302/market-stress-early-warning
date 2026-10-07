@@ -69,7 +69,40 @@ export default function MarketRiskPage() {
   const [loading, setLoading] = useState(true);
   const [apiError, setApiError] = useState(false);
   const [timeRange, setTimeRange] = useState<'1Y' | '3Y' | '5Y' | 'ALL'>('3Y');
+  const riskScore = latest?.risk_score_10d ?? null;
 
+  const riskLevel =
+    riskScore === null
+      ? '---'
+      : riskScore >= 70
+        ? 'HIGH'
+        : riskScore >= 50
+          ? 'ELEVATED'
+          : riskScore >= 30
+            ? 'WATCH'
+            : 'LOW';
+
+  const riskLevelStyle =
+    riskLevel === 'HIGH'
+      ? 'text-financial-red border-financial-red/40 bg-financial-red/10'
+      : riskLevel === 'ELEVATED'
+        ? 'text-orange-400 border-orange-400/40 bg-orange-400/10'
+        : riskLevel === 'WATCH'
+          ? 'text-financial-amber border-financial-amber/40 bg-financial-amber/10'
+          : riskLevel === 'LOW'
+            ? 'text-financial-green border-financial-green/40 bg-financial-green/10'
+            : 'text-gray-500 border-gray-500/40 bg-gray-500/10';
+
+  const riskLevelText =
+    riskLevel === 'HIGH'
+      ? 'Broad U.S. financial-market stress risk is currently high.'
+      : riskLevel === 'ELEVATED'
+        ? 'Broad U.S. financial-market stress risk is currently elevated.'
+        : riskLevel === 'WATCH'
+          ? 'Broad U.S. financial-market stress risk is currently on watch.'
+          : riskLevel === 'LOW'
+            ? 'Broad U.S. financial-market stress risk is currently low.'
+            : 'Market risk assessment is currently unavailable.';
   const filteredHistory = React.useMemo(() => {
     if (timeRange === 'ALL') return history;
     if (history.length === 0) return [];
@@ -149,7 +182,57 @@ export default function MarketRiskPage() {
     shapData?.top_drivers.filter(
       (driver) => driver.direction === 'risk_down'
     ) ?? [];
+  const marketDriverGroups = [
+    {
+      label: 'Stock Market',
+      value:
+        shapData?.top_drivers
+          .filter((driver) => driver.feature.startsWith('SPY_'))
+          .reduce((sum, driver) => sum + driver.shap_value, 0) ?? 0,
+    },
+    {
+      label: 'Market Volatility',
+      value:
+        shapData?.top_drivers
+          .filter((driver) => driver.feature.startsWith('VIX_'))
+          .reduce((sum, driver) => sum + driver.shap_value, 0) ?? 0,
+    },
+    {
+      label: 'Credit Conditions',
+      value:
+        shapData?.top_drivers
+          .filter(
+            (driver) =>
+              driver.feature.startsWith('Credit_') ||
+              driver.feature.startsWith('BAA_')
+          )
+          .reduce((sum, driver) => sum + driver.shap_value, 0) ?? 0,
+    },
+  ];
 
+  const driverDirection = (value: number) => {
+    if (value > 0) {
+      return {
+        label: 'Net Risk-Increasing',
+        symbol: '↑',
+        className: 'text-financial-red',
+      };
+    }
+
+    if (value < 0) {
+      return {
+        label: 'Net Risk-Reducing',
+        symbol: '↓',
+        className: 'text-emerald-400',
+      };
+    }
+
+    return {
+      label: 'Neutral',
+      symbol: '→',
+      className: 'text-gray-400',
+    };
+  };
 
   if (loading) {
     return (
@@ -343,45 +426,62 @@ export default function MarketRiskPage() {
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
 
-        {/* 10-Day Risk Score */}
+              {/* Current Market Risk */}
+          <div className="bg-dark-card border border-dark-border p-6 rounded-lg flex flex-col justify-between">
+            <div>
+              <div className="flex items-center justify-between mb-3">
+                <h3 className="text-xs font-semibold text-gray-400 uppercase tracking-wider">
+                  Current Market Risk
+                </h3>
 
-        <div className="bg-dark-card border border-dark-border p-6 rounded-lg flex flex-col justify-between">
+                <Activity className="w-4 h-4 text-financial-green" />
+              </div>
 
-          <div>
-            <div className="flex items-center justify-between mb-3">
+              <div className="flex items-center gap-3">
+                <div className="flex items-baseline space-x-2">
+                  <span className="text-5xl font-black font-mono text-gray-100">
+                    {latest?.risk_score_10d ?? '--'}
+                  </span>
 
-              <h3 className="text-xs font-semibold text-gray-400 uppercase tracking-wider">
-                10-Day Market Stress Risk Score
-              </h3>
+                  <span className="text-sm text-gray-500">
+                    / 100
+                  </span>
+                </div>
 
-              <Activity className="w-4 h-4 text-financial-red" />
+                <span
+                  className={`text-xs font-bold tracking-wider border rounded px-3 py-1 ${riskLevelStyle}`}
+              >
+                {riskLevel}
+              </span>
+              </div>
+
+              <div className="mt-3 text-[10px] font-mono tracking-wider text-gray-500">
+                NEXT 10 TRADING DAYS
+              </div>
             </div>
 
+            <div className="mt-5 pt-4 border-t border-dark-border">
+              <p className="text-sm font-semibold text-gray-200 leading-relaxed">
+                {riskLevelText}
+              </p>
 
-            <div className="flex items-baseline space-x-2">
+              <p className="text-xs leading-relaxed text-gray-500 mt-2">
+                Similar out-of-sample risk-score conditions were historically
+                associated with a relatively low rate of 10-day stress windows.
+                The score is not a calibrated event probability.
+              </p>
 
-              <span className="text-5xl font-black font-mono text-gray-100">
-                {latest?.risk_score_10d ?? '--'}
-              </span>
-
-              <span className="text-sm text-gray-500">
-                / 100
-              </span>
-
+              <div className="flex flex-wrap gap-2 mt-4 text-[9px] font-mono">
+                <span className="text-financial-green">LOW &lt;30</span>
+                <span className="text-gray-600">·</span>
+                <span className="text-financial-amber">WATCH 30–49</span>
+                <span className="text-gray-600">·</span>
+                <span className="text-orange-400">ELEVATED 50–69</span>
+                <span className="text-gray-600">·</span>
+                <span className="text-financial-red">HIGH ≥70</span>
+              </div>
             </div>
           </div>
-
-
-          <div className="mt-5 pt-4 border-t border-dark-border">
-
-            <p className="text-xs leading-relaxed text-gray-500">
-              Model-estimated stress risk score for the next
-              10 trading days. The score is not interpreted as
-              a calibrated event probability.
-            </p>
-
-          </div>
-        </div>
 
 
         {/* MSI */}
@@ -461,7 +561,60 @@ export default function MarketRiskPage() {
 
       </div>
 
+        {/* ==================================================
+            Market Driver Summary
+        ================================================== */}
 
+        <div className="bg-dark-card border border-dark-border p-6 rounded-lg">
+
+          <div className="mb-5">
+            <h3 className="text-sm font-bold text-gray-200 tracking-wider">
+              WHAT IS DRIVING THE CURRENT ASSESSMENT?
+            </h3>
+
+            <p className="text-xs text-gray-500 mt-1">
+              Latest leading SHAP drivers grouped by market channel
+            </p>
+          </div>
+
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+            {marketDriverGroups.map((group) => {
+              const direction = driverDirection(group.value);
+
+              return (
+                <div
+                  key={group.label}
+                  className="border border-dark-border rounded-lg p-4"
+                >
+                  <div className="text-[11px] font-semibold text-gray-500 uppercase tracking-wider">
+                    {group.label}
+                  </div>
+
+                  <div
+                    className={`mt-3 flex items-center gap-2 text-sm font-semibold ${direction.className}`}
+                  >
+                    <span className="font-mono text-base">
+                      {direction.symbol}
+                    </span>
+
+                    <span>
+                      {direction.label}
+                    </span>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+
+          <div className="mt-4 pt-4 border-t border-dark-border">
+            <p className="text-[10px] leading-relaxed text-gray-600">
+              Each channel combines the SHAP effects of its leading model drivers.
+              Individual factors may move in opposite directions; the label shows
+              their net effect on the latest model output.
+            </p>
+          </div>
+
+        </div>
       {/* ==================================================
           Model Risk Drivers - SHAP
       ================================================== */}
