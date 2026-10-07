@@ -1,130 +1,155 @@
-U.S. Financial Market Stress Early Warning System
-AI-based early-warning system for U.S. financial-market stress using equity, volatility, and credit-market information.
-Research question: Can currently observable financial-market information provide an early warning of a U.S. financial-market Stress Event occurring within the next 10 trading days?
+# U.S. Financial Market Stress Early Warning System
 
-This is not a stock-price forecasting model. The objective is to identify elevated broad-market stress risk using information available at each point in time.
-System Overview
-The system combines SPY (equity), VIX (volatility), and a Moody's Baa corporate yield − 10-Year U.S. Treasury yield credit-spread proxy. These inputs form the Market Stress Index (MSI), forward 10-day target, and 17 predictive features.
-The fitted XGBoost deployment model produces the latest 10-Day Market Stress Risk Score, while SHAP identifies current risk-increasing and risk-reducing drivers.
-Dashboard
-PAGE 01 — Market Risk: current market indicators, MSI, 10-Day Risk Score, SHAP drivers, and historical OOS risk vs SPY.
-PAGE 02 — Model Validation: Logistic vs XGBoost OOS performance, evaluation metrics, and historical stress-period analysis.
-PAGE 03 — Methodology: stress/target definitions, feature specification, purged walk-forward validation, SHAP, rate-feature ablation, and limitations.
-Market Stress Index
-Component	Definition
-Equity Stress	Negative 21-trading-day SPY return
-Volatility Stress	VIX level
-Credit Stress	Baa corporate yield − 10-Year U.S. Treasury yield
+> **AI-based early-warning system for broad U.S. financial-market stress using equity, volatility, and credit-market information.**
 
+## Research Question
 
-Each component is standardized with a 252-trading-day rolling Z-score shifted by one observation, so the reference distribution for date t uses only prior information. The three components receive equal weights.
+**Can currently observable financial-market information provide an early warning of a U.S. financial-market Stress Event occurring within the next 10 trading days?**
+
+This is **not a stock-price forecasting or market-timing model**.
+
+The objective is to estimate whether broad U.S. financial-market stress risk is becoming elevated using only information available at each point in time.
+
+---
+
+# 1. System Overview
+
+The system combines information from three major market channels:
+
+- **Equity:** SPY
+- **Volatility:** VIX
+- **Credit:** Moody's Baa Corporate Yield − 10-Year U.S. Treasury Yield
+
+These inputs are used to construct:
+
+- a **Market Stress Index (MSI)**
+- forward Stress Event targets
+- **17 predictive features**
+- Logistic Regression and XGBoost early-warning models
+- walk-forward out-of-sample historical risk scores
+- SHAP-based current model explanations
+- LOFO out-of-sample signal importance
+
+The fitted XGBoost deployment model produces the latest:
+
+**10-Day Market Stress Risk Score**
+
+The score is an early-warning model output and **is not interpreted as a calibrated event probability**.
+
+---
+
+# 2. Dashboard
+
+The project includes a Next.js dashboard backed by a FastAPI API.
+
+### PAGE 01 — Market Risk Intelligence
+
+Provides:
+
+- current SPY, VIX, and credit-spread conditions
+- Market Stress Index
+- 10-Day Market Stress Risk Score
+- LOW / WATCH / ELEVATED / HIGH risk classification
+- market-channel risk summary
+- SHAP risk-increasing and risk-reducing drivers
+- historical walk-forward OOS Risk Score vs SPY
+
+### PAGE 02 — Model Validation
+
+Provides:
+
+- Logistic Regression vs XGBoost
+- 1D / 5D / 10D / 20D horizon validation
+- ROC-AUC / PR-AUC / Brier Score
+- Precision / Recall / F1
+- False Alarm Rate / Missed Event Rate
+- historical stress-period analysis
+- pre-stress early-warning analysis
+- warning-persistence analysis
+- LOFO OOS signal importance
+
+### PAGE 03 — Methodology
+
+Documents:
+
+- Stress Event definition
+- target construction
+- feature specification
+- label-overlap purge
+- expanding walk-forward validation
+- SHAP interpretation
+- feature-extension experiments
+- model limitations
+
+---
+
+# 3. Market Stress Index
+
+Broad market stress is defined across three dimensions.
+
+| Component | Definition |
+|---|---|
+| Equity Stress | Negative 21-trading-day SPY return |
+| Volatility Stress | VIX level |
+| Credit Stress | Baa corporate yield − 10-Year U.S. Treasury yield |
+
+Each component is standardized using a **252-trading-day rolling Z-score**.
+
+The rolling reference distribution is shifted so that the reference statistics for date `t` use only information available before that observation.
+
+The three components receive equal weights:
+
+```text
 MSI = (Z_Equity + Z_VIX + Z_Credit) / 3
-Forward 10-Day Target
-Target_10D(t) = 1 if at least one defined Stress Event occurs during trading days t+1 through t+10; otherwise it equals 0.
-Incomplete forward horizons remain unknown rather than being converted into artificial negatives. Stress thresholds are estimated using past information only.
-Final Feature Set — 17 Features
-Equity (7): SPY 1D Return, 5D Return, 20D Return, 20D Volatility, 60D Volatility, Drawdown, 20D Momentum.
-Volatility (5): VIX Level, 1D Change, 5D Change, 20D Momentum, 252D Z-Score.
-Credit (5): BAA–Treasury Spread Level, Credit 1D Change, 5D Change, 20D Momentum, 252D Z-Score.
-Models and Purged Walk-Forward Validation
-Logistic Regression is the interpretable baseline. XGBoost captures nonlinear relationships and interactions and is the current deployment model.
-Random train/test splitting is not used. Evaluation follows:
-TRAIN → 10D PURGE → OOS TEST → EXPAND
-The 10-trading-observation label-overlap purge prevents training labels whose forward target windows overlap the beginning of the test period. Historical dashboard predictions are walk-forward out-of-sample predictions, not in-sample backfits.
-Walk-Forward OOS Results
-- OOS period: 2006-08-09 → 2026-09-16
-- Observations: 5,057
-- Positive prevalence: 17.48%
-Model	ROC-AUC	PR-AUC	Brier	Precision	Recall	F1
-Logistic Regression	0.9219	0.8066	0.1283	0.4932	0.8665	0.6286
-XGBoost	0.8991	0.7785	0.0984	0.5939	0.7760	0.6729
+```
 
+The MSI describes **current market stress**.
 
-At the fixed 0.5 reference threshold, Logistic FAR/Missed Event Rate = 0.1886 / 0.1335; XGBoost = 0.1124 / 0.2240.
-Logistic provides stronger OOS discrimination and recall. XGBoost provides fewer false alarms and stronger precision/F1 at the fixed reference threshold, plus a lower Brier score. XGBoost is therefore not described as an unconditional winner.
-Risk Score ≠ Calibrated Probability
-Calibration diagnostics showed overconfidence in several intermediate/high-score regions. The dashboard therefore reports a 10-Day Market Stress Risk Score, not a literal event probability. A score of 70 should not be interpreted as exactly 70% event probability.
-SHAP Explainability
-SHAP explains the fitted XGBoost deployment model's latest score. The dashboard separates Risk Increasing Drivers and Risk Reducing Drivers.
-SHAP values indicate direction and relative model-output contribution; they are not probability-point changes.
-Endpoint: GET /api/shap
-Credit-Spread Proxy
-The credit variable is Moody's Seasoned Baa Corporate Bond Yield minus the 10-Year U.S. Treasury Constant Maturity Rate. It is a Baa–Treasury credit-stress proxy, not ICE BofA High Yield OAS. Its long history supports validation through periods including 2008.
-Rate-Feature Ablation
-Four U.S. Treasury/yield-curve features were tested under the same purged walk-forward OOS framework, temporarily expanding 17 features to 21.
-Metric	17F	21F
-Logistic ROC-AUC	0.9219	0.9158
-Logistic PR-AUC	0.8066	0.7855
-XGBoost ROC-AUC	0.8991	0.9010
-XGBoost PR-AUC	0.7785	0.7731
+It is distinct from the forward-looking Risk Score.
 
+---
 
-The rate features did not demonstrate consistent incremental OOS predictive value, so the final specification remains 17 features. This does not imply rates are economically unimportant.
-API
-Endpoint	Purpose
-GET /health	API health
-GET /api/latest	Latest market data, MSI and Risk Score
-GET /api/shap	Latest XGBoost SHAP drivers
-GET /api/historical	Historical walk-forward OOS series
-GET /api/validation	OOS validation results
+# 4. Stress Event and Forward Targets
 
+A Stress Event occurs when the Market Stress Index exceeds a threshold estimated from historical information available at that time.
 
-Tech Stack
-ML/Data: Python, pandas, scikit-learn, XGBoost, SHAP
-Backend: FastAPI, Uvicorn
-Frontend: Next.js, React, TypeScript, Tailwind CSS, Recharts
-Market Data: Yahoo Finance, FRED
-Local Development
-python -m venv .venv
-source .venv/bin/activate
-pip install -r requirements.txt
-python run_pipeline.py
-python -m src.explainability.shap_analysis
-uvicorn src.api.main:app --reload --host 127.0.0.1 --port 8000
-Frontend:
-cd frontend
-npm install
-npm run dev
-Limitations
-- Risk Score is not a calibrated event probability.
-- Credit is represented by a long-history Baa–Treasury proxy rather than ICE BofA HY OAS.
-- Historical performance uses purged walk-forward OOS predictions; current SHAP explains the fitted deployment model.
-- The system estimates broad U.S. financial-market stress risk, not a stock trading signal or direct market-timing strategy.
-- Historical performance does not guarantee future crisis detection.
-Research Principle
-Methodological defensibility takes priority over adding variables that do not demonstrate incremental out-of-sample value.
+Forward targets ask whether a Stress Event occurs within a specified future trading horizon.
 
-한국어 설명 | Korean Guide
-프로젝트 소개
-이 프로젝트는 미국 금융시장 스트레스 조기경보 시스템입니다.
-단순히 “향후 SPY가 하락할 것인가?”를 예측하는 주가예측 모델이 아니라, 현재 시점에서 관측 가능한 주식시장·변동성·신용시장 정보를 이용해 향후 10거래일 이내 미국 금융시장 Stress Event 발생 위험이 높아지는지를 조기에 탐지하는 것을 목표로 합니다.
-핵심 연구 질문은 다음과 같습니다.
-현재 이용 가능한 금융시장 정보를 활용하여 향후 10거래일 이내 미국 금융시장 Stress Event 발생 가능성을 조기에 예측할 수 있는가?
+For the primary 10-day model:
 
-핵심 데이터
-시스템은 서로 다른 세 가지 금융시장 정보를 결합합니다.
-- SPY: 미국 주식시장 상황
-- VIX: 시장의 기대 변동성
-- BAA–Treasury Spread: Moody's Baa 회사채 금리 − 미국 10년물 국채금리로 계산한 신용 스트레스 대용치
-이 세 시장 정보를 기반으로 Market Stress Index(MSI)를 만들고, 17개 머신러닝 피처를 생성하여 Logistic Regression과 XGBoost를 비교합니다.
-Market Stress Index
-시장 스트레스는 단순한 주가 하락이 아니라 세 가지 차원으로 정의합니다.
-구성요소	정의
-Equity Stress	SPY 21거래일 수익률의 음수값
-Volatility Stress	VIX 수준
-Credit Stress	Baa 회사채 금리 − 미국 10년물 국채금리
-
-
-각 변수는 252거래일 rolling Z-score로 표준화합니다. 이때 shift(1)을 적용해 날짜 t의 기준 평균과 표준편차 계산에는 t-1까지의 정보만 사용합니다.
-세 요소에는 임의적인 중요도 차이를 두지 않고 동일 가중치를 적용합니다.
-MSI = (Z_Equity + Z_VIX + Z_Credit) / 3
-10거래일 Forward Target
-날짜 t를 기준으로 향후 t+1부터 t+10 거래일 사이에 Stress Event가 한 번이라도 발생하면:
+```text
 Target_10D(t) = 1
-그렇지 않으면 0입니다.
-향후 10거래일이 완전히 존재하지 않는 최근 관측치는 억지로 0으로 처리하지 않고 unknown으로 남깁니다. Stress Event 기준 역시 해당 시점까지 이용 가능한 과거 정보만으로 산출합니다.
-최종 17개 피처
-주식시장 7개
+```
+
+if at least one Stress Event occurs during:
+
+```text
+t+1 ... t+10
+```
+
+Otherwise:
+
+```text
+Target_10D(t) = 0
+```
+
+Incomplete forward horizons remain unknown rather than being converted into artificial negative observations.
+
+Additional robustness horizons are evaluated at:
+
+- 1 trading day
+- 5 trading days
+- 10 trading days
+- 20 trading days
+
+---
+
+# 5. Final Feature Set — 17 Features
+
+The final specification intentionally remains compact.
+
+## Equity — 7
+
 - SPY 1D Return
 - SPY 5D Return
 - SPY 20D Return
@@ -132,72 +157,583 @@ Target_10D(t) = 1
 - SPY 60D Volatility
 - SPY Drawdown
 - SPY 20D Momentum
-변동성 5개
+
+## Volatility — 5
+
 - VIX Level
 - VIX 1D Change
 - VIX 5D Change
 - VIX 20D Momentum
 - VIX 252D Z-Score
-신용시장 5개
+
+## Credit — 5
+
 - BAA–Treasury Spread Level
 - Credit 1D Change
 - Credit 5D Change
 - Credit 20D Momentum
 - Credit 252D Z-Score
-모델과 검증 방식
-Logistic Regression은 해석 가능한 baseline 모델로 사용합니다.
-XGBoost는 변수 간 비선형 관계와 interaction을 포착하기 위한 모델이며 현재 웹서비스의 deployment model로 사용합니다.
-시계열 데이터에서 미래 정보가 과거 학습에 섞이는 문제를 방지하기 위해 random train/test split을 사용하지 않고 expanding-window walk-forward validation을 적용합니다.
-TRAIN → 10D PURGE → OOS TEST → EXPAND
-Target 자체가 향후 10거래일을 참조하기 때문에 테스트 구간 직전에는 10거래일 label-overlap purge를 둡니다. 이를 통해 학습 데이터의 target window가 테스트 구간과 겹치는 것을 방지합니다.
-웹사이트의 과거 위험 점수 역시 in-sample 재현값이 아니라 walk-forward OOS prediction을 사용합니다.
-최종 OOS 성능
-- 검증 기간: 2006-08-09 ~ 2026-09-16
-- OOS 관측치: 5,057개
-- Positive prevalence: 17.48%
-모델	ROC-AUC	PR-AUC	Brier	Precision	Recall	F1
-Logistic Regression	0.9219	0.8066	0.1283	0.4932	0.8665	0.6286
-XGBoost	0.8991	0.7785	0.0984	0.5939	0.7760	0.6729
 
+Additional variables were retained only when they demonstrated defensible incremental value under the same out-of-sample framework.
 
-고정된 0.5 기준에서 Logistic Regression은 높은 Recall과 낮은 Missed Event Rate를 보였고, XGBoost는 낮은 False Alarm Rate와 높은 Precision/F1을 보였습니다.
-따라서 XGBoost를 단순히 “성능이 가장 좋은 모델”이라고 주장하지 않습니다. 두 모델은 서로 다른 성능상의 장점을 보이며, XGBoost는 현재 deployment model로 사용합니다.
-Risk Score를 확률이라고 부르지 않는 이유
-Calibration 분석 결과 raw model output은 특히 중간~높은 점수 영역에서 실제 발생률보다 과신하는 경향이 확인되었습니다.
-따라서 웹사이트에서는 이를 10-Day Market Stress Risk Score라고 표현합니다.
-예를 들어 Risk Score가 70이라고 해서 “Stress Event가 발생할 확률이 정확히 70%”라는 의미는 아닙니다. 점수가 높을수록 모델이 판단한 상대적인 시장 스트레스 위험이 높다는 의미입니다.
-SHAP Explainability
-최신 XGBoost 위험 점수가 왜 만들어졌는지 설명하기 위해 SHAP을 적용했습니다.
-웹사이트에서는 주요 요인을 다음 두 그룹으로 나눕니다.
-- Risk Increasing Drivers: 현재 위험 점수를 높이는 변수
-- Risk Reducing Drivers: 현재 위험 점수를 낮추는 변수
-SHAP 값은 모델 출력에 대한 변수의 방향과 상대적 기여도를 의미하며, 발생확률의 퍼센트포인트 변화량을 의미하지 않습니다.
-금리 변수 Ablation Test
-미국 2년물·10년물 국채금리와 10Y–2Y 수익률곡선 관련 변수를 추가하여 기존 17개 피처를 21개로 확장한 실험도 수행했습니다.
-동일한 purged walk-forward OOS 환경에서 비교한 결과:
-지표	17F	21F
-Logistic ROC-AUC	0.9219	0.9158
-Logistic PR-AUC	0.8066	0.7855
-XGBoost ROC-AUC	0.8991	0.9010
-XGBoost PR-AUC	0.7785	0.7731
+---
 
+# 6. Model Selection
 
-일부 지표에서는 소폭 개선이 있었지만 전체적으로 일관된 증분 OOS 예측력을 확인하지 못했습니다. 따라서 최종 모델에서는 기존 17개 피처를 유지했습니다.
-이는 금리가 금융시장에서 중요하지 않다는 뜻이 아니라, 이번 모델과 변수 정의에서는 기존 주식·변동성·신용 정보에 추가되는 안정적인 예측력을 확인하지 못했다는 의미입니다.
-주요 API
-Endpoint	기능
-GET /health	API 상태 확인
-GET /api/latest	최신 시장정보, MSI, Risk Score
-GET /api/shap	최신 XGBoost SHAP 설명
-GET /api/historical	과거 walk-forward OOS 데이터
-GET /api/validation	모델 OOS 성능 및 검증 결과
+Two models are used.
 
+## Logistic Regression
 
-해석 시 주의사항
-- Risk Score는 calibration이 완료된 실제 발생확률이 아닙니다.
-- Credit 변수는 ICE BofA HY OAS가 아니라 장기 시계열 확보를 위한 Baa–Treasury spread proxy입니다.
-- 과거 성능 분석은 purged walk-forward OOS prediction을 사용하지만, 최신 SHAP은 전체 관측 가능한 labeled data로 학습된 deployment model을 설명합니다.
-- 이 시스템은 미국 금융시장의 광범위한 스트레스 위험을 탐지하기 위한 것으로, 개별 종목 매매신호나 직접적인 market-timing 전략이 아닙니다.
-- 과거 위기에서의 성능이 미래 위기 탐지를 보장하지 않습니다.
-프로젝트 원칙
-변수를 많이 추가하는 것보다, 실제 Out-of-Sample 환경에서 검증 가능한 방법론적 타당성을 우선한다
+Used as an interpretable linear baseline.
+
+It provides a useful reference for determining whether a more flexible nonlinear model adds practical value.
+
+## XGBoost
+
+Used as the nonlinear deployment model.
+
+It can capture nonlinear relationships and interactions between equity, volatility, and credit-market conditions.
+
+### Why not simply add more algorithms?
+
+The purpose of this project is not to maximize the number of algorithms compared.
+
+Logistic Regression and XGBoost provide two meaningfully different model classes:
+
+```text
+Interpretable linear baseline
+            ↓
+Logistic Regression
+
+Nonlinear tree boosting
+            ↓
+XGBoost
+```
+
+Random Forest would add another tree-based ensemble with a partially overlapping role.
+
+Deep-learning models were not prioritized because the final dataset consists of a relatively small set of structured financial-market features. Increasing model complexity was not assumed to produce more reliable out-of-sample early-warning performance.
+
+Model complexity is therefore kept proportional to the data and research objective.
+
+---
+
+# 7. Leakage-Safe Walk-Forward Validation
+
+Random train/test splitting is **not used**.
+
+Financial time series must preserve chronological order.
+
+Evaluation follows an expanding walk-forward structure:
+
+```text
+TRAIN → PURGE → OOS TEST → EXPAND
+```
+
+Because an `H`-day target uses future observations through `t+H`, the corresponding validation uses an `H`-observation label-overlap purge.
+
+Therefore:
+
+| Horizon | Purge |
+|---:|---:|
+| 1D | 1 observation |
+| 5D | 5 observations |
+| 10D | 10 observations |
+| 20D | 20 observations |
+
+This prevents training labels whose forward windows overlap the beginning of the test period.
+
+Historical dashboard Risk Scores are **walk-forward out-of-sample predictions**, not in-sample backfits.
+
+---
+
+# 8. Multi-Horizon OOS Results
+
+## 1-Day Horizon
+
+| Model | ROC-AUC | PR-AUC | Brier | Precision | Recall | F1 |
+|---|---:|---:|---:|---:|---:|---:|
+| Logistic | 0.9886 | 0.9247 | 0.0483 | 0.5913 | 0.9556 | 0.7305 |
+| XGBoost | 0.9844 | 0.9001 | 0.0398 | 0.6449 | 0.9172 | 0.7573 |
+
+OOS observations: **5,069**
+
+Positive prevalence: **9.77%**
+
+---
+
+## 5-Day Horizon
+
+| Model | ROC-AUC | PR-AUC | Brier | Precision | Recall | F1 |
+|---|---:|---:|---:|---:|---:|---:|
+| Logistic | 0.9611 | 0.8557 | 0.0888 | 0.5392 | 0.9113 | 0.6775 |
+| XGBoost | 0.9498 | 0.8337 | 0.0710 | 0.6049 | 0.8366 | 0.7021 |
+
+OOS observations: **5,065**
+
+Positive prevalence: **14.02%**
+
+---
+
+## 10-Day Horizon — Primary Model
+
+| Model | ROC-AUC | PR-AUC | Brier | Precision | Recall | F1 | FAR | Missed Rate |
+|---|---:|---:|---:|---:|---:|---:|---:|---:|
+| Logistic | 0.9220 | 0.8065 | 0.1282 | 0.4932 | 0.8665 | 0.6286 | 0.1885 | 0.1335 |
+| XGBoost | 0.8991 | 0.7778 | 0.0986 | 0.5929 | 0.7760 | 0.6722 | 0.1128 | 0.2240 |
+
+OOS observations: **5,060**
+
+Positive prevalence: **17.47%**
+
+At the fixed `0.5` reference threshold:
+
+- Logistic Regression provides stronger discrimination and recall.
+- XGBoost provides higher precision and F1 and fewer false alarms.
+- XGBoost also produces the lower Brier score.
+
+XGBoost is therefore **not described as an unconditional performance winner**.
+
+The two models exhibit different operational trade-offs.
+
+---
+
+## 20-Day Horizon
+
+| Model | ROC-AUC | PR-AUC | Brier | Precision | Recall | F1 |
+|---|---:|---:|---:|---:|---:|---:|
+| Logistic | 0.8555 | 0.7320 | 0.1752 | 0.4727 | 0.8019 | 0.5948 |
+| XGBoost | 0.8138 | 0.7099 | 0.1485 | 0.5495 | 0.6920 | 0.6126 |
+
+OOS observations: **5,050**
+
+Positive prevalence: **22.89%**
+
+Raw model scores should not be compared as literal probabilities across horizons because target prevalence changes mechanically with the forward window.
+
+---
+
+# 9. Early-Warning Analysis
+
+Predictive ranking metrics alone do not answer an operational question:
+
+> **Does the model actually produce warnings before known stress episodes?**
+
+Using 29 historical OOS stress episodes, the proportion containing at least one warning before stress onset was examined.
+
+## Logistic Regression
+
+| Pre-Stress Window | Episodes with ≥1 Warning |
+|---|---:|
+| 20–11 trading days | 69.0% |
+| 10–6 trading days | 72.4% |
+| 5–1 trading days | 100.0% |
+
+## XGBoost
+
+| Pre-Stress Window | Episodes with ≥1 Warning |
+|---|---:|
+| 20–11 trading days | 48.3% |
+| 10–6 trading days | 62.1% |
+| 5–1 trading days | 86.2% |
+
+These figures are **conditional on known historical stress episodes**.
+
+They are not model accuracy rates.
+
+The 20–11 day window is exploratory because it extends beyond the primary 10-day forecast horizon.
+
+---
+
+# 10. Warning Persistence
+
+A one-day threshold crossing may be transient.
+
+To examine whether persistent warnings are more informative, XGBoost warning episodes are anchored to the **first day the OOS Risk Score crosses the fixed 0.5 reference threshold**.
+
+The analysis then checks whether a Stress Event occurs within the following 20 trading observations.
+
+| Minimum Warning Persistence | Historical Stress Follow-Through |
+|---|---:|
+| ≥1 day | 38.0% |
+| ≥2 days | 48.2% |
+| ≥3 days | 57.1% |
+
+Longer warning persistence was historically associated with greater stress follow-through.
+
+This is an experimental warning-episode diagnostic and is distinct from the standard classification False Alarm Rate.
+
+---
+
+# 11. Risk Score ≠ Calibrated Probability
+
+Calibration diagnostics showed overconfidence in several intermediate and high-score regions.
+
+Therefore the dashboard reports:
+
+**Market Stress Risk Score**
+
+rather than:
+
+**Stress Event Probability**
+
+For example:
+
+```text
+Risk Score = 70
+```
+
+does **not** mean:
+
+```text
+70% probability of a Stress Event
+```
+
+The score should be interpreted as a model-based relative warning signal.
+
+---
+
+# 12. Risk-Level Communication Bands
+
+For dashboard communication, the 10-day XGBoost Risk Score is grouped into descriptive bands:
+
+| Risk Score | Dashboard Level |
+|---:|---|
+| < 30 | LOW |
+| 30–49.9 | WATCH |
+| 50–69.9 | ELEVATED |
+| ≥ 70 | HIGH |
+
+These bands are a communication layer rather than calibrated probability intervals.
+
+Historical walk-forward OOS observations showed increasing empirical 10-day Stress Event prevalence as scores increased.
+
+The fixed `0.5` model reference threshold also marks the transition into the ELEVATED range.
+
+---
+
+# 13. SHAP Explainability
+
+SHAP explains the fitted XGBoost deployment model's latest output.
+
+The dashboard separates:
+
+- **Risk Increasing Drivers**
+- **Risk Reducing Drivers**
+
+It also aggregates leading SHAP effects into three market channels:
+
+- Stock Market
+- Market Volatility
+- Credit Conditions
+
+Channel labels represent the **net direction of the leading SHAP contributions**.
+
+Individual variables within the same channel may still move in opposite directions.
+
+SHAP values describe model-output contributions.
+
+They should **not** be interpreted as percentage-point changes in event probability.
+
+---
+
+# 14. SHAP vs LOFO OOS Importance
+
+SHAP and out-of-sample signal importance answer different questions.
+
+### SHAP
+
+> What is driving the fitted model's output?
+
+### LOFO — Leave One Feature Out
+
+> Does this feature provide incremental predictive information out of sample, conditional on the other features?
+
+The primary LOFO metric is:
+
+```text
+Δ PR-AUC = Full 17-Feature PR-AUC − Reduced 16-Feature PR-AUC
+```
+
+Positive values indicate incremental OOS contribution.
+
+Negative values may indicate redundancy or noise conditional on the remaining features; they do not imply that the underlying financial variable is inherently unimportant.
+
+The strongest consistent unique OOS signals across the two models were:
+
+- **VIX 252D Z-Score**
+- **Credit Spread 252D Z-Score**
+
+This suggests that the **relative level of volatility and credit stress compared with their own recent history** contains particularly useful early-warning information.
+
+LOFO is used for interpretation, not automatic feature pruning.
+
+The final specification remains the predefined 17-feature set.
+
+---
+
+# 15. Feature Extensions and Ablation Tests
+
+Additional market variables were evaluated under the same purged walk-forward OOS framework.
+
+Variables were not retained simply because they were economically plausible.
+
+They had to demonstrate consistent incremental predictive value.
+
+## U.S. Rates / Yield Curve
+
+Treasury-rate and yield-curve variables were evaluated as an extension of the core model.
+
+They did not provide consistent incremental OOS predictive value over the existing equity, volatility, and credit features.
+
+**Decision: excluded from final specification.**
+
+This does not imply that interest rates are economically unimportant.
+
+---
+
+## Banking / Liquidity
+
+Banking and liquidity indicators were evaluated after the 2023 U.S. banking turmoil.
+
+Under the same purged walk-forward OOS framework, they did not provide consistent incremental predictive value over the core 17-feature model.
+
+**Decision: excluded.**
+
+The 2023 banking turmoil temporarily elevated model Risk Scores but did not satisfy the project's broad-market Stress Event definition.
+
+The target was not redefined post hoc to force the episode to become a positive event.
+
+---
+
+## Market Breadth — RSP / SPY
+
+An equity-breadth extension using RSP relative to SPY was evaluated.
+
+### Logistic Regression
+
+```text
+Core 17F PR-AUC:    0.7477
+Breadth 20F PR-AUC: 0.7242
+```
+
+### XGBoost
+
+```text
+Core 17F PR-AUC:    0.7425
+Breadth 20F PR-AUC: 0.7273
+```
+
+The breadth extension did not improve OOS performance.
+
+**Decision: excluded.**
+
+---
+
+## Bitcoin
+
+Bitcoin-related features were evaluated on a common post-2014 sample to avoid giving the extended model a different evaluation period.
+
+### Logistic Regression
+
+```text
+Core 17F PR-AUC: 0.7150
+BTC 21F PR-AUC:  0.7004
+```
+
+### XGBoost
+
+```text
+Core 17F PR-AUC: 0.7472
+BTC 21F PR-AUC:  0.7389
+```
+
+Bitcoin reacted to several stress periods, but its addition did not materially improve early-warning performance in this framework.
+
+**Decision: excluded.**
+
+---
+
+# 16. Credit-Spread Proxy
+
+The credit variable is:
+
+**Moody's Seasoned Baa Corporate Bond Yield − 10-Year U.S. Treasury Constant Maturity Rate**
+
+It is a **Baa–Treasury credit-stress proxy**.
+
+It should not be described as ICE BofA High Yield OAS.
+
+A long-history credit proxy was used so that validation could include major historical stress periods such as the Global Financial Crisis.
+
+---
+
+# 17. API
+
+| Endpoint | Purpose |
+|---|---|
+| `GET /health` | API health |
+| `GET /api/latest` | Latest market data, MSI and Risk Score |
+| `GET /api/shap` | Latest XGBoost SHAP drivers |
+| `GET /api/historical` | Historical walk-forward OOS series |
+| `GET /api/validation` | Primary OOS validation |
+| `GET /api/multi-horizon-validation` | 1D / 5D / 10D / 20D validation |
+
+---
+
+# 18. Tech Stack
+
+### Machine Learning / Data
+
+- Python
+- pandas
+- NumPy
+- scikit-learn
+- XGBoost
+- SHAP
+
+### Backend
+
+- FastAPI
+- Uvicorn
+
+### Frontend
+
+- Next.js
+- React
+- TypeScript
+- Tailwind CSS
+- Recharts
+
+### Market Data
+
+- Yahoo Finance
+- FRED
+
+---
+
+# 19. Local Development
+
+## Backend
+
+```bash
+cd market-stress-early-warning
+
+python -m venv .venv
+source .venv/bin/activate
+
+pip install -r requirements.txt
+
+python run_pipeline.py
+python -m src.explainability.shap_analysis
+
+uvicorn src.api.main:app --host 0.0.0.0 --port 8000
+```
+
+API:
+
+```text
+http://localhost:8000
+```
+
+Health check:
+
+```text
+http://localhost:8000/health
+```
+
+## Frontend
+
+Open a separate terminal:
+
+```bash
+cd market-stress-early-warning/frontend
+
+npm install
+npm run dev
+```
+
+Dashboard:
+
+```text
+http://localhost:3000
+```
+
+---
+
+# 20. Limitations
+
+- The Risk Score is not a calibrated event probability.
+- The target represents **broad U.S. financial-market stress**, not every type of financial incident.
+- Credit stress is represented using a long-history Baa–Treasury proxy rather than ICE BofA HY OAS.
+- Historical performance is based on purged walk-forward OOS predictions.
+- Current SHAP explains the fitted deployment model rather than historical OOS models.
+- Warning-persistence analysis is an experimental diagnostic and should not be confused with standard classification FAR.
+- Feature-extension results depend on the specific variable definitions, data availability, sample period, and validation framework used here.
+- Historical crisis performance does not guarantee detection of future crises.
+- The system is not an individual-stock trading signal or direct market-timing strategy.
+
+---
+
+# 21. Research Principle
+
+> **Methodological defensibility takes priority over model complexity or feature count.**
+
+The project deliberately distinguishes:
+
+```text
+Current stress       → Market Stress Index
+Forward warning      → Market Stress Risk Score
+Model explanation    → SHAP
+Incremental OOS info → LOFO
+```
+
+Additional variables are retained only when they demonstrate defensible incremental value under the same leakage-safe out-of-sample framework.
+
+---
+
+# Korean Summary | 한국어 요약
+
+이 프로젝트는 **미국 금융시장 스트레스 조기경보 시스템**입니다.
+
+단순히 SPY의 상승·하락을 예측하는 주가예측 모델이 아니라,
+
+> **현재 관측 가능한 주식시장·변동성·신용시장 정보를 이용해 향후 미국 금융시장의 광범위한 Stress Event 위험 상승을 조기에 탐지할 수 있는가?**
+
+를 검증하는 것이 핵심 목적입니다.
+
+### 핵심 구조
+
+```text
+SPY + VIX + Credit Spread
+          ↓
+Market Stress Index
+          ↓
+17개 금융시장 Feature
+          ↓
+Logistic Regression + XGBoost
+          ↓
+Purged Walk-Forward OOS Validation
+          ↓
+10-Day Market Stress Risk Score
+```
+
+시계열 누수를 방지하기 위해 random train/test split 대신 **expanding walk-forward validation**을 사용하며, forward target의 기간에 맞는 **label-overlap purge**를 적용합니다.
+
+Logistic Regression은 해석 가능한 baseline, XGBoost는 비선형 관계를 포착하는 deployment model로 사용합니다.
+
+10D OOS 결과에서 Logistic Regression은 ROC-AUC와 Recall 측면에서 강점을 보였고, XGBoost는 Precision, F1, False Alarm Rate 및 Brier Score 측면에서 강점을 보였습니다.
+
+따라서 XGBoost를 단순히 “가장 성능이 좋은 모델”이라고 주장하지 않습니다.
+
+또한 모델의 raw output에서 calibration 문제가 확인되었기 때문에 웹사이트에서는 이를 실제 발생확률이 아니라 **Market Stress Risk Score**라고 표현합니다.
+
+SHAP은 현재 모델 출력의 주요 원인을 설명하고, LOFO 분석은 각 feature가 다른 변수들을 통제한 상태에서 실제 OOS 예측력에 추가 정보를 제공하는지를 검증합니다.
+
+금리/수익률곡선, Banking/Liquidity, Market Breadth, Bitcoin 관련 변수도 추가 검증했지만 동일한 OOS 환경에서 일관된 증분 예측력을 확인하지 못해 최종 17개 feature에서는 제외했습니다.
+
+이 프로젝트의 핵심 원칙은:
+
+> **변수나 모델의 개수를 늘리는 것보다 실제 Out-of-Sample 환경에서 검증 가능한 방법론적 타당성을 우선하는 것**
+
+입니다.
