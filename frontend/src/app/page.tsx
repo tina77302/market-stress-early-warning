@@ -1,962 +1,147 @@
 'use client';
 
-import React, { useEffect, useState } from 'react';
-import {
-  ResponsiveContainer,
-  AreaChart,
-  ComposedChart,
-  Area,
-  XAxis,
-  YAxis,
-  Tooltip,
-  LineChart,
-  Line,
-  CartesianGrid,
-} from 'recharts';
-import {
-  Activity,
-  Clock,
-  Database,
-  ShieldCheck,
-} from 'lucide-react';
+import { useEffect, useMemo, useState } from 'react';
+import Link from 'next/link';
+import { Activity, ArrowDown, ArrowRight, ArrowUp, BarChart3, BookOpen, ChevronRight, Clock3, Database, FlaskConical, Globe2, Home, Lightbulb, ShieldAlert } from 'lucide-react';
+import { Area, CartesianGrid, ComposedChart, Line, LineChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts';
 
+const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://127.0.0.1:8000';
+interface Latest { last_updated: string; risk_score_10d: number | null; spy_price: number | null; vix_level: number | null; baa_treasury_spread: number | null; market_stress_index: number | null }
+interface Historical { date: string; spy: number | null; vix: number | null; baa_treasury_spread: number | null; risk_score_xgboost: number | null }
+interface Shap { date: string; top_drivers: { feature: string; shap_value: number }[] }
+type Range = '1Y' | '3Y' | '5Y' | 'ALL';
+const finite = (value: unknown): value is number => typeof value === 'number' && Number.isFinite(value);
+const format = (value: unknown, digits = 2, prefix = '', suffix = '') => finite(value) ? `${prefix}${value.toFixed(digits)}${suffix}` : '--';
 
-const API_URL =
-  process.env.NEXT_PUBLIC_API_URL || 'http://127.0.0.1:8000';
-
-interface LatestData {
-  last_updated: string;
-  spy_price: number;
-  vix_level: number;
-  baa_treasury_spread: number;
-  market_stress_index: number;
-  risk_score_10d: number;
-  risk_score_note: string;
+function MarketGlobe() {
+  return <div className="market-globe" aria-label="Global markets illustration: U.S. model available; Korea coming soon" role="img">
+    <svg viewBox="0 0 520 360" aria-hidden="true">
+      <defs>
+        <radialGradient id="home-ocean" cx="32%" cy="28%"><stop stopColor="#123d61"/><stop offset=".7" stopColor="#071d31"/><stop offset="1" stopColor="#030b14"/></radialGradient>
+        <radialGradient id="home-halo"><stop stopColor="#36a7e8" stopOpacity=".48"/><stop offset="1" stopColor="#218ad8" stopOpacity="0"/></radialGradient>
+        <clipPath id="home-earth-clip"><circle cx="260" cy="180" r="151"/></clipPath>
+        <filter id="home-glow"><feGaussianBlur stdDeviation="6"/></filter>
+      </defs>
+      <g className="globe-network" fill="none" stroke="#4d93bd" strokeWidth=".7">
+        <path d="M18 212Q260 12 500 202M42 85Q250 265 485 73M36 278Q258 76 493 265"/>
+        <ellipse cx="260" cy="180" rx="224" ry="90" transform="rotate(-22 260 180)"/>
+        <path d="M65 60L130 91 194 43 302 63 450 112M25 246L108 271 203 311 364 296 480 237" strokeDasharray="2 6"/>
+        {[[65,60],[130,91],[302,63],[450,112],[108,271],[364,296],[480,237]].map(([cx,cy]) => <circle key={`${cx}-${cy}`} cx={cx} cy={cy} r="2" fill="#77bce3" stroke="none"/>)}
+      </g>
+      <circle className="globe-atmosphere" cx="260" cy="180" r="179" fill="url(#home-halo)"/>
+      <circle cx="260" cy="180" r="151" fill="url(#home-ocean)" stroke="#28618b" strokeWidth="1.5"/>
+      <g clipPath="url(#home-earth-clip)" fill="none" stroke="#2b6487" strokeOpacity=".35">
+        {[45, 90, 130].map(r => <ellipse key={r} cx="260" cy="180" rx={r} ry="151"/>)}
+        {[85, 125, 180, 235, 275].map(y => <ellipse key={y} cx="260" cy={y} rx="151" ry="24"/>)}
+      </g>
+      <g clipPath="url(#home-earth-clip)" fill="#0b2a40" stroke="#3b7aa5" strokeWidth="1.2" strokeLinejoin="round">
+        <path d="M115 100l25-18 23-6 18-24 41-5 23 15-7 21-23 5-9 17-19 3-4 21-13 7 5 17 20 9 2 17-12 8-18-17-10-27-26-9-12-23z"/>
+        <path d="M188 191l24-10 27 20 12 25-8 17-8 33-18 24-10-16 2-30-11-19-4-24z"/>
+        <path d="M239 40l22-9 18 14-8 33-17 8-16-17z"/>
+        <path d="M282 101l17-18 23 3 8-14 34 7 19 21 34 9 14 31-15 20-21-4-11 20-19-11-9-27-18-2-12-17-12 9-19-7-8 9-15-9z"/>
+        <path d="M280 140l28-7 30 24 7 27-19 43-19 21-15-15-3-31-20-32z"/>
+        <path d="M371 245l27-12 28 17-7 20-31 5-20-13z"/>
+        <path d="M384 162l5 18-4 14-5-18z"/>
+      </g>
+      <g clipPath="url(#home-earth-clip)" fill="none" stroke="#5dbdeb" strokeWidth=".8" strokeOpacity=".35">
+        <path d="M166 138Q268 31 382 147M166 138Q225 154 303 126M303 126Q361 154 388 251M166 138Q160 201 217 237" strokeDasharray="3 5"/>
+        <circle cx="303" cy="126" r="2" fill="#91d3f2"/><circle cx="217" cy="237" r="2" fill="#91d3f2"/><circle cx="388" cy="251" r="2" fill="#91d3f2"/>
+      </g>
+      <circle className="market-node-pulse node-us" cx="166" cy="138" r="10" fill="none" stroke="#46e0bc"/>
+      <circle className="market-node-pulse node-korea" cx="382" cy="147" r="10" fill="none" stroke="#edc26d"/>
+      <path d="M83 116Q132 104 166 138" fill="none" stroke="#1de0b2" strokeWidth="1.5"/>
+      <path d="M382 147Q409 173 453 177" fill="none" stroke="#e6af48" strokeWidth="1.5"/>
+      <circle cx="166" cy="138" r="17" fill="#1de0b2" filter="url(#home-glow)"/><circle cx="166" cy="138" r="4" fill="#9affdf"/>
+      <circle cx="382" cy="147" r="15" fill="#f4b844" filter="url(#home-glow)"/><circle cx="382" cy="147" r="4" fill="#ffe2a0"/>
+    </svg>
+    <span className="globe-label globe-us"><span>🇺🇸</span> U.S.</span><span className="globe-label globe-kr"><span>🇰🇷</span> Korea <small>SOON</small></span>
+  </div>;
 }
 
-
-interface HistoricalPoint {
-  date: string;
-  spy: number;
-  vix: number;
-  baa_treasury_spread: number;
-  msi: number;
-  risk_score_logistic: number;
-  risk_score_xgboost: number;
-  target: number;
+function Sparkline({ data, field }: { data: Historical[]; field: 'spy' | 'vix' | 'baa_treasury_spread' }) {
+  if (!data.some(point => finite(point[field]))) return <div className="spark-empty">Historical data unavailable</div>;
+  return <div className="metric-spark" aria-hidden="true"><ResponsiveContainer width="100%" height="100%"><LineChart data={data}><YAxis hide domain={['dataMin', 'dataMax']}/><Line dataKey={field} dot={false} stroke="#2ccab5" strokeWidth={1.6} isAnimationActive={false}/></LineChart></ResponsiveContainer></div>;
 }
-
-interface ShapDriver {
-  feature: string;
-  feature_value: number;
-  shap_value: number;
-  direction: 'risk_up' | 'risk_down';
-}
-
-interface ShapData {
-  date: string;
-  model: string;
-  feature_count: number;
-  top_drivers: ShapDriver[];
-  interpretation_note: string;
-}
-
 
 export default function MarketRiskPage() {
-  const [latest, setLatest] = useState<LatestData | null>(null);
-  const [history, setHistory] = useState<HistoricalPoint[]>([]);
-  const [shapData, setShapData] = useState<ShapData | null>(null);
+  const [latest, setLatest] = useState<Latest | null>(null);
+  const [history, setHistory] = useState<Historical[]>([]);
+  const [shap, setShap] = useState<Shap | null>(null);
   const [loading, setLoading] = useState(true);
-  const [apiError, setApiError] = useState(false);
-  const [timeRange, setTimeRange] = useState<'1Y' | '3Y' | '5Y' | 'ALL'>('3Y');
-  const riskScore = latest?.risk_score_10d ?? null;
-
-  const riskLevel =
-    riskScore === null
-      ? '---'
-      : riskScore >= 70
-        ? 'HIGH'
-        : riskScore >= 50
-          ? 'ELEVATED'
-          : riskScore >= 30
-            ? 'WATCH'
-            : 'LOW';
-
-  const riskLevelStyle =
-    riskLevel === 'HIGH'
-      ? 'text-financial-red border-financial-red/40 bg-financial-red/10'
-      : riskLevel === 'ELEVATED'
-        ? 'text-orange-400 border-orange-400/40 bg-orange-400/10'
-        : riskLevel === 'WATCH'
-          ? 'text-financial-amber border-financial-amber/40 bg-financial-amber/10'
-          : riskLevel === 'LOW'
-            ? 'text-financial-green border-financial-green/40 bg-financial-green/10'
-            : 'text-gray-500 border-gray-500/40 bg-gray-500/10';
-
-  const riskLevelText =
-    riskLevel === 'HIGH'
-      ? 'Broad U.S. financial-market stress risk is currently high.'
-      : riskLevel === 'ELEVATED'
-        ? 'Broad U.S. financial-market stress risk is currently elevated.'
-        : riskLevel === 'WATCH'
-          ? 'Broad U.S. financial-market stress risk is currently on watch.'
-          : riskLevel === 'LOW'
-            ? 'Broad U.S. financial-market stress risk is currently low.'
-            : 'Market risk assessment is currently unavailable.';
-  const filteredHistory = React.useMemo(() => {
-    if (timeRange === 'ALL') return history;
-    if (history.length === 0) return [];
-
-    const lastDate = new Date(history[history.length - 1].date);
-    const startDate = new Date(lastDate);
-
-    const years =
-      timeRange === '1Y' ? 1 :
-      timeRange === '3Y' ? 3 :
-      5;
-
-    startDate.setFullYear(startDate.getFullYear() - years);
-
-    return history.filter(
-      (point) => new Date(point.date) >= startDate
-    );
-  }, [history, timeRange]);
-
-
+  const [errors, setErrors] = useState<string[]>([]);
+  const [range, setRange] = useState<Range>('3Y');
+  const [insightsOpen, setInsightsOpen] = useState(false);
+  const [refresh, setRefresh] = useState(0);
   useEffect(() => {
-    async function fetchData() {
-      try {
-        const [resLatest, resHist, resShap] = await Promise.all([
-          fetch(`${API_URL}/api/latest`),
-          fetch(`${API_URL}/api/historical?days=10000`),
-          fetch(`${API_URL}/api/shap`),
-        ]);
-
-        if (!resLatest.ok || !resHist.ok || !resShap.ok) {
-          throw new Error('API request failed');
-        }
-
-        const dataLatest = await resLatest.json();
-        const dataHist = await resHist.json();
-        const dataShap = await resShap.json();
-
-        setLatest(dataLatest);
-        setHistory(dataHist.data);
-        setShapData(dataShap);
-        setApiError(false);
-      } catch (err) {
-        console.error('API connection failed', err);
-        setApiError(true);
-      } finally {
-        setLoading(false);
-      }
+    const controller = new AbortController();
+    setLoading(true); setErrors([]);
+    async function request(path: string) {
+      const response = await fetch(`${API_URL}${path}`, { signal: controller.signal });
+      if (!response.ok) throw new Error(path);
+      return response.json();
     }
-
-    fetchData();
-  }, []);
-
-
-  const featureLabel = (feature: string) => {
-    const labels: Record<string, string> = {
-      VIX_252D_ZScore: 'VIX Relative Level',
-      Credit_252D_ZScore: 'Credit Spread Relative Level',
-      SPY_Drawdown: 'SPY Drawdown',
-      SPY_20D_Vol: 'SPY 20D Volatility',
-      Credit_Level: 'Credit Spread Level',
-      SPY_20D_Momentum: 'SPY 20D Momentum',
-      SPY_20D_Return: 'SPY 20D Return',
-      Credit_20D_Momentum: 'Credit Spread Momentum',
-      SPY_60D_Vol: 'SPY 60D Volatility',
-      VIX_20D_Momentum: 'VIX 20D Momentum',
-    };
-
-    return labels[feature] ?? feature.replaceAll('_', ' ');
-  };
-
-  const riskIncreasing =
-    shapData?.top_drivers.filter(
-      (driver) => driver.direction === 'risk_up'
-    ) ?? [];
-
-  const riskReducing =
-    shapData?.top_drivers.filter(
-      (driver) => driver.direction === 'risk_down'
-    ) ?? [];
-  const marketDriverGroups = [
-    {
-      label: 'Stock Market',
-      value:
-        shapData?.top_drivers
-          .filter((driver) => driver.feature.startsWith('SPY_'))
-          .reduce((sum, driver) => sum + driver.shap_value, 0) ?? 0,
-    },
-    {
-      label: 'Market Volatility',
-      value:
-        shapData?.top_drivers
-          .filter((driver) => driver.feature.startsWith('VIX_'))
-          .reduce((sum, driver) => sum + driver.shap_value, 0) ?? 0,
-    },
-    {
-      label: 'Credit Conditions',
-      value:
-        shapData?.top_drivers
-          .filter(
-            (driver) =>
-              driver.feature.startsWith('Credit_') ||
-              driver.feature.startsWith('BAA_')
-          )
-          .reduce((sum, driver) => sum + driver.shap_value, 0) ?? 0,
-    },
+    async function load() {
+      const results = await Promise.allSettled([request('/api/latest'), request('/api/historical?days=10000'), request('/api/shap')]);
+      if (controller.signal.aborted) return;
+      const [current, historical, drivers] = results;
+      setLatest(current.status === 'fulfilled' ? current.value : null);
+      setHistory(historical.status === 'fulfilled' && Array.isArray(historical.value.data) ? [...historical.value.data].sort((a: Historical, b: Historical) => a.date.localeCompare(b.date)) : []);
+      setShap(drivers.status === 'fulfilled' && Array.isArray(drivers.value.top_drivers) ? drivers.value : null);
+      setErrors(results.flatMap((result, i) => result.status === 'rejected' ? [['Market snapshot', 'Historical data', 'SHAP drivers'][i]] : []));
+      setLoading(false);
+    }
+    void load();
+    return () => controller.abort();
+  }, [refresh]);
+  const score = latest?.risk_score_10d;
+  const level = !finite(score) ? '--' : score >= 70 ? 'HIGH' : score >= 50 ? 'ELEVATED' : score >= 30 ? 'WATCH' : 'LOW';
+  const tone = level === 'LOW' ? 'green' : level === 'WATCH' ? 'amber' : level === '--' ? 'muted' : 'red';
+  const filtered = useMemo(() => {
+    if (range === 'ALL' || !history.length) return history;
+    const start = new Date(history[history.length - 1].date);
+    start.setFullYear(start.getFullYear() - Number(range[0]));
+    return history.filter(point => new Date(point.date) >= start);
+  }, [history, range]);
+  const metrics = [
+    { label: 'SPY', value: format(latest?.spy_price, 2, '$'), field: 'spy' as const },
+    { label: 'VIX', value: format(latest?.vix_level), field: 'vix' as const },
+    { label: 'Baa–Treasury', value: format(latest?.baa_treasury_spread, 2, '', '%'), field: 'baa_treasury_spread' as const },
   ];
-
-  const driverDirection = (value: number) => {
-    if (value > 0) {
-      return {
-        label: 'Net Risk-Increasing',
-        symbol: '↑',
-        className: 'text-financial-red',
-      };
-    }
-
-    if (value < 0) {
-      return {
-        label: 'Net Risk-Reducing',
-        symbol: '↓',
-        className: 'text-emerald-400',
-      };
-    }
-
-    return {
-      label: 'Neutral',
-      symbol: '→',
-      className: 'text-gray-400',
-    };
-  };
-
-  if (loading) {
-    return (
-      <div className="min-h-[60vh] flex items-center justify-center">
-        <div className="text-sm text-gray-400 font-mono">
-          LOADING MARKET RISK DATA...
-        </div>
-        {/* ==================================================
-            Market Stress Drivers
-        ================================================== */}
-
-        <div className="bg-dark-card border border-dark-border p-6 rounded-lg space-y-4">
-
-          <div className="flex flex-col md:flex-row md:items-center justify-between gap-2">
-
-            <div>
-              <h3 className="text-sm font-bold text-gray-200 tracking-wider">
-                MARKET STRESS DRIVERS
-              </h3>
-
-              <p className="text-xs text-gray-500 mt-1">
-                Volatility and credit-market conditions
-              </p>
-            </div>
-
-            <div className="flex items-center gap-4 text-[11px] font-mono">
-              <span className="flex items-center gap-1.5 text-gray-400">
-                <span className="inline-block w-3 h-[2px] bg-[#F59E0B]" />
-                VIX
-              </span>
-
-              <span className="flex items-center gap-1.5 text-gray-400">
-                <span className="inline-block w-3 h-[2px] bg-[#A78BFA]" />
-                BAA-Treasury Spread
-              </span>
-            </div>
-
-          </div>
-
-          <div className="h-[260px]">
-
-            <ResponsiveContainer width="100%" height="100%">
-
-              <ComposedChart data={filteredHistory}>
-
-                <CartesianGrid
-                  strokeDasharray="3 3"
-                  stroke="#2A2F3D"
-                />
-
-                <XAxis
-                  dataKey="date"
-                  stroke="#6B7280"
-                  tick={{ fontSize: 10 }}
-                />
-
-                <YAxis
-                  yAxisId="vix"
-                  stroke="#F59E0B"
-                  tick={{ fontSize: 10, fill: '#F59E0B' }}
-                  domain={['auto', 'auto']}
-                />
-
-                <YAxis
-                  yAxisId="credit"
-                  orientation="right"
-                  stroke="#A78BFA"
-                  tick={{ fontSize: 10, fill: '#A78BFA' }}
-                  domain={['auto', 'auto']}
-                />
-
-                <Tooltip
-                  contentStyle={{
-                    backgroundColor: '#151921',
-                    borderColor: '#2A2F3D',
-                    color: '#fff',
-                  }}
-                />
-
-                <Line
-                  yAxisId="vix"
-                  type="monotone"
-                  dataKey="vix"
-                  name="VIX"
-                  stroke="#F59E0B"
-                  dot={false}
-                  strokeWidth={1.8}
-                  isAnimationActive={false}
-                />
-
-                <Line
-                  yAxisId="credit"
-                  type="monotone"
-                  dataKey="baa_treasury_spread"
-                  name="BAA-Treasury Spread"
-                  stroke="#A78BFA"
-                  dot={false}
-                  strokeWidth={1.8}
-                  isAnimationActive={false}
-                />
-
-              </ComposedChart>
-
-            </ResponsiveContainer>
-
-          </div>
-
-          <div className="flex items-center gap-2 text-[11px] text-gray-500">
-            <Database className="w-3.5 h-3.5" />
-
-            <span>
-              VIX captures equity-market volatility while the BAA-Treasury spread
-              serves as the long-history credit-stress proxy.
-            </span>
-          </div>
-
-        </div>
-
-      </div>
-    );
-  }
-
-
-  return (
-    <div className="space-y-6">
-
-      {/* ==================================================
-          Header / Market Snapshot
-      ================================================== */}
-
-      <div className="flex flex-col xl:flex-row xl:items-center justify-between gap-4 bg-dark-card border border-dark-border p-4 rounded-lg">
-
-        <div className="flex items-center space-x-2 text-xs text-gray-400">
-          <Clock className="w-4 h-4 text-gray-500" />
-
-          <span>LAST MARKET OBSERVATION:</span>
-
-          <span className="font-mono text-gray-200">
-            {latest?.last_updated ?? '---'}
-          </span>
-
-          {apiError && (
-            <span className="ml-3 text-financial-red">
-              API OFFLINE
-            </span>
-          )}
-        </div>
-
-
-        <div className="flex flex-wrap items-center gap-x-8 gap-y-2 text-sm">
-
-          <div>
-            <span className="text-gray-400 mr-2">
-              SPY
-            </span>
-
-            <span className="font-mono font-bold text-white">
-              ${latest?.spy_price ?? '---'}
-            </span>
-          </div>
-
-
-          <div>
-            <span className="text-gray-400 mr-2">
-              VIX
-            </span>
-
-            <span className="font-mono font-bold text-financial-amber">
-              {latest?.vix_level ?? '---'}
-            </span>
-          </div>
-
-
-          <div>
-            <span className="text-gray-400 mr-2">
-              BAA–TREASURY
-            </span>
-
-            <span className="font-mono font-bold text-financial-blue">
-              {latest?.baa_treasury_spread ?? '---'}%
-            </span>
-          </div>
-
-        </div>
-      </div>
-
-
-      {/* ==================================================
-          Main Metrics
-      ================================================== */}
-
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-
-              {/* Current Market Risk */}
-          <div className="bg-dark-card border border-dark-border p-6 rounded-lg flex flex-col justify-between">
-            <div>
-              <div className="flex items-center justify-between mb-3">
-                <h3 className="text-xs font-semibold text-gray-400 uppercase tracking-wider">
-                  Current Market Risk
-                </h3>
-
-                <Activity className="w-4 h-4 text-financial-green" />
-              </div>
-
-              <div className="flex items-center gap-3">
-                <div className="flex items-baseline space-x-2">
-                  <span className="text-5xl font-black font-mono text-gray-100">
-                    {latest?.risk_score_10d ?? '--'}
-                  </span>
-
-                  <span className="text-sm text-gray-500">
-                    / 100
-                  </span>
-                </div>
-
-                <span
-                  className={`text-xs font-bold tracking-wider border rounded px-3 py-1 ${riskLevelStyle}`}
-              >
-                {riskLevel}
-              </span>
-              </div>
-
-              <div className="mt-3 text-[10px] font-mono tracking-wider text-gray-500">
-                NEXT 10 TRADING DAYS
-              </div>
-            </div>
-
-            <div className="mt-5 pt-4 border-t border-dark-border">
-              <p className="text-sm font-semibold text-gray-200 leading-relaxed">
-                {riskLevelText}
-              </p>
-
-              <p className="text-xs leading-relaxed text-gray-500 mt-2">
-                Similar out-of-sample risk-score conditions were historically
-                associated with a relatively low rate of 10-day stress windows.
-                The score is not a calibrated event probability.
-              </p>
-
-              <div className="flex flex-wrap gap-2 mt-4 text-[9px] font-mono">
-                <span className="text-financial-green">LOW &lt;30</span>
-                <span className="text-gray-600">·</span>
-                <span className="text-financial-amber">WATCH 30–49</span>
-                <span className="text-gray-600">·</span>
-                <span className="text-orange-400">ELEVATED 50–69</span>
-                <span className="text-gray-600">·</span>
-                <span className="text-financial-red">HIGH ≥70</span>
-              </div>
-            </div>
-          </div>
-
-
-        {/* MSI */}
-
-        <div className="bg-dark-card border border-dark-border p-6 rounded-lg flex flex-col justify-between">
-
-          <div>
-            <h3 className="text-xs font-semibold text-gray-400 uppercase tracking-wider mb-3">
-              Market Stress Index
-            </h3>
-
-            <div className="flex items-baseline space-x-3">
-
-              <span className="text-5xl font-black font-mono text-gray-100">
-                {latest?.market_stress_index ?? '--'}
-              </span>
-
-              <span className="text-xs text-gray-500">
-                Composite Score
-              </span>
-
-            </div>
-          </div>
-
-
-          <p className="text-xs text-gray-500 mt-5">
-            Equal-weighted composite of equity,
-            volatility and credit stress.
-          </p>
-
-        </div>
-
-
-        {/* Model Engine */}
-
-        <div className="bg-dark-card border border-dark-border p-6 rounded-lg flex flex-col justify-between">
-
-          <div>
-
-            <h3 className="text-xs font-semibold text-gray-400 uppercase tracking-wider mb-3">
-              Deployment Model
-            </h3>
-
-
-            <div className="flex items-center space-x-2 text-lg font-bold text-white">
-
-              <ShieldCheck className="w-5 h-5 text-gray-400" />
-
-              <span>
-                XGBoost
-              </span>
-
-            </div>
-
-
-            <p className="text-xs text-gray-400 mt-2">
-              Deployment model trained on currently
-              observable labeled data.
-            </p>
-
-          </div>
-
-
-          <div className="pt-4 mt-4 border-t border-dark-border text-xs text-gray-500 space-y-1">
-
-            <div>
-              Forecast Horizon: 10 Trading Days
-            </div>
-
-            <div>
-              Validation: Purged Walk-Forward OOS
-            </div>
-
-          </div>
-
-        </div>
-
-      </div>
-
-        {/* ==================================================
-            Market Driver Summary
-        ================================================== */}
-
-        <div className="bg-dark-card border border-dark-border p-6 rounded-lg">
-
-          <div className="mb-5">
-            <h3 className="text-sm font-bold text-gray-200 tracking-wider">
-              WHAT IS DRIVING THE CURRENT ASSESSMENT?
-            </h3>
-
-            <p className="text-xs text-gray-500 mt-1">
-              Latest leading SHAP drivers grouped by market channel
-            </p>
-          </div>
-
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-            {marketDriverGroups.map((group) => {
-              const direction = driverDirection(group.value);
-
-              return (
-                <div
-                  key={group.label}
-                  className="border border-dark-border rounded-lg p-4"
-                >
-                  <div className="text-[11px] font-semibold text-gray-500 uppercase tracking-wider">
-                    {group.label}
-                  </div>
-
-                  <div
-                    className={`mt-3 flex items-center gap-2 text-sm font-semibold ${direction.className}`}
-                  >
-                    <span className="font-mono text-base">
-                      {direction.symbol}
-                    </span>
-
-                    <span>
-                      {direction.label}
-                    </span>
-                  </div>
-                </div>
-              );
-            })}
-          </div>
-
-          <div className="mt-4 pt-4 border-t border-dark-border">
-            <p className="text-[10px] leading-relaxed text-gray-600">
-              Each channel combines the SHAP effects of its leading model drivers.
-              Individual factors may move in opposite directions; the label shows
-              their net effect on the latest model output.
-            </p>
-          </div>
-
-        </div>
-      {/* ==================================================
-          Model Risk Drivers - SHAP
-      ================================================== */}
-
-      <div className="bg-dark-card border border-dark-border p-6 rounded-lg space-y-5">
-
-        <div className="flex flex-col md:flex-row md:items-center justify-between gap-2">
-          <div>
-            <h3 className="text-sm font-bold text-gray-200 tracking-wider">
-              MODEL RISK DRIVERS
-            </h3>
-
-            <p className="text-xs text-gray-500 mt-1">
-              Latest XGBoost explanation using SHAP
-            </p>
-          </div>
-
-          <div className="text-[11px] font-mono text-gray-500">
-            {shapData
-              ? `${shapData.date} · ${shapData.feature_count} FEATURES`
-              : 'SHAP DATA UNAVAILABLE'}
-          </div>
-        </div>
-
-
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-
-          <div className="border border-dark-border rounded-lg p-4">
-            <div className="text-[11px] font-semibold tracking-wider text-financial-red mb-4">
-              RISK INCREASING
-            </div>
-
-            <div className="space-y-3">
-              {riskIncreasing.length > 0 ? (
-                riskIncreasing.map((driver) => (
-                  <div
-                    key={driver.feature}
-                    className="flex items-center justify-between gap-4"
-                  >
-                    <span className="text-xs text-gray-300">
-                      {featureLabel(driver.feature)}
-                    </span>
-
-                    <span className="text-xs font-mono text-financial-red">
-                      ↑
-                    </span>
-                  </div>
-                ))
-              ) : (
-                <div className="text-xs text-gray-500">
-                  No increasing drivers among the leading SHAP factors.
-                </div>
-              )}
-            </div>
-          </div>
-
-
-          <div className="border border-dark-border rounded-lg p-4">
-            <div className="text-[11px] font-semibold tracking-wider text-emerald-400 mb-4">
-              RISK REDUCING
-            </div>
-
-            <div className="space-y-3">
-              {riskReducing.length > 0 ? (
-                riskReducing.map((driver) => (
-                  <div
-                    key={driver.feature}
-                    className="flex items-center justify-between gap-4"
-                  >
-                    <span className="text-xs text-gray-300">
-                      {featureLabel(driver.feature)}
-                    </span>
-
-                    <span className="text-xs font-mono text-emerald-400">
-                      ↓
-                    </span>
-                  </div>
-                ))
-              ) : (
-                <div className="text-xs text-gray-500">
-                  No reducing drivers among the leading SHAP factors.
-                </div>
-              )}
-            </div>
-          </div>
-
-        </div>
-
-
-        <div className="flex items-start gap-2 text-[11px] leading-relaxed text-gray-500">
-          <Database className="w-3.5 h-3.5 mt-0.5 shrink-0" />
-
-          <span>
-            SHAP explains the direction and relative contribution of each
-            feature to the latest XGBoost risk score. Contributions are
-            model-output effects, not percentage-point changes in event probability.
-          </span>
-        </div>
-
-      </div>
-
-
-      {/* ==================================================
-          Historical OOS Risk
-      ================================================== */}
-
-      <div className="bg-dark-card border border-dark-border p-6 rounded-lg space-y-4">
-
-        <div className="flex flex-col md:flex-row md:items-center justify-between gap-2">
-
-          <div>
-            <h3 className="text-sm font-bold text-gray-200 tracking-wider">
-              HISTORICAL 10-DAY OOS RISK SCORE vs SPY
-            </h3>
-
-            <p className="text-xs text-gray-500 mt-1">
-              XGBoost walk-forward out-of-sample scores
-            </p>
-          </div>
-
-
-          <div className="flex items-center gap-4">
-            <div className="hidden lg:flex items-center gap-4 text-[11px] font-mono">
-              <span className="flex items-center gap-1.5 text-gray-400">
-                <span className="inline-block w-3 h-[2px] bg-[#F23645]" />
-                10D Risk Score
-              </span>
-              <span className="flex items-center gap-1.5 text-gray-400">
-                <span className="inline-block w-3 h-[2px] bg-[#4DA3FF]" />
-                SPY Price
-              </span>
-            </div>
-
-            <div className="flex items-center gap-1 bg-dark-bg border border-dark-border rounded p-1">
-              {(['1Y', '3Y', '5Y', 'ALL'] as const).map((range) => (
-              <button
-                key={range}
-                onClick={() => setTimeRange(range)}
-                className={`px-3 py-1.5 rounded text-[11px] font-mono transition-colors ${
-                  timeRange === range
-                    ? 'bg-gray-700 text-white'
-                    : 'text-gray-500 hover:text-gray-200'
-                }`}
-              >
-                {range}
-              </button>
-              ))}
-            </div>
-          </div>
-
-        </div>
-
-
-        <div className="h-[340px]">
-
-          <ResponsiveContainer width="100%" height="100%">
-
-            <ComposedChart data={filteredHistory}>
-
-              <defs>
-                <linearGradient
-                  id="riskGrad"
-                  x1="0"
-                  y1="0"
-                  x2="0"
-                  y2="1"
-                >
-                  <stop
-                    offset="5%"
-                    stopColor="#F23645"
-                    stopOpacity={0.55}
-                  />
-
-                  <stop
-                    offset="95%"
-                    stopColor="#F23645"
-                    stopOpacity={0}
-                  />
-                </linearGradient>
-              </defs>
-
-
-              <CartesianGrid
-                strokeDasharray="3 3"
-                stroke="#2A2F3D"
-              />
-
-
-              <XAxis
-                dataKey="date"
-                stroke="#6B7280"
-                tick={{ fontSize: 10 }}
-              />
-
-
-              <YAxis
-                yAxisId="risk"
-                domain={[0, 100]}
-                stroke="#F23645"
-                tick={{ fontSize: 10 }}
-              />
-
-
-              <YAxis
-                yAxisId="spy"
-                orientation="right"
-                stroke="#2962FF"
-                tick={{ fontSize: 10 }}
-                domain={['auto', 'auto']}
-              />
-
-
-              <Tooltip
-                contentStyle={{
-                  backgroundColor: '#151921',
-                  borderColor: '#2A2F3D',
-                  color: '#fff',
-                }}
-              />
-
-
-              <Area
-                yAxisId="risk"
-                type="monotone"
-                dataKey="risk_score_xgboost"
-                name="10D Risk Score"
-                stroke="#F23645"
-                fillOpacity={1}
-                fill="url(#riskGrad)"
-              />
-
-
-              <Line
-                yAxisId="spy"
-                type="monotone"
-                dataKey="spy"
-                name="SPY Price"
-                stroke="#2962FF"
-                dot={false}
-                strokeWidth={2}
-              />
-
-            </ComposedChart>
-
-          </ResponsiveContainer>
-
-        </div>
-
-
-        <div className="flex items-center gap-2 text-[11px] text-gray-500">
-
-          <Database className="w-3.5 h-3.5" />
-
-          <span>
-            Historical scores are generated strictly from
-            walk-forward out-of-sample predictions.
-          </span>
-
-        </div>
-
-      </div>
-
-
-      {/* ==================================================
-          MSI History
-      ================================================== */}
-
-      <div className="bg-dark-card border border-dark-border p-6 rounded-lg space-y-4">
-
-        <div className="flex flex-col md:flex-row md:items-center justify-between gap-2">
-
-          <div>
-
-            <h3 className="text-sm font-bold text-gray-200 tracking-wider">
-              MARKET STRESS INDEX
-            </h3>
-
-            <p className="text-xs text-gray-500 mt-1">
-              Equity + volatility + credit stress composite
-            </p>
-
-          </div>
-
-
-          <span className="text-xs text-gray-400">
-            Historical OOS window
-          </span>
-
-        </div>
-
-
-        <div className="h-[240px]">
-
-          <ResponsiveContainer width="100%" height="100%">
-
-            <LineChart data={filteredHistory}>
-
-              <CartesianGrid
-                strokeDasharray="3 3"
-                stroke="#2A2F3D"
-              />
-
-
-              <XAxis
-                dataKey="date"
-                stroke="#6B7280"
-                tick={{ fontSize: 10 }}
-              />
-
-
-              <YAxis
-                stroke="#9CA3AF"
-                tick={{ fontSize: 10 }}
-              />
-
-
-              <Tooltip
-                contentStyle={{
-                  backgroundColor: '#151921',
-                  borderColor: '#2A2F3D',
-                  color: '#fff',
-                }}
-              />
-
-
-              <Line
-                type="monotone"
-                dataKey="msi"
-                name="Market Stress Index"
-                stroke="#22D3EE"
-                dot={false}
-                strokeWidth={1.5}
-              />
-
-            </LineChart>
-
-          </ResponsiveContainer>
-
-        </div>
-
-      </div>
-
+  const groups = [
+    { label: 'Stock Market', icon: BarChart3, match: (f: string) => f.startsWith('SPY_') },
+    { label: 'Market Volatility', icon: Activity, match: (f: string) => f.startsWith('VIX_') },
+    { label: 'Credit Conditions', icon: Database, match: (f: string) => /^(Credit_|BAA_)/.test(f) },
+  ];
+  return <div className="risk-home">
+    <header className="home-nav">
+      <Link href="/" className="home-brand"><ShieldAlert size={27}/><span>MARKET RISK INTELLIGENCE</span><small>AI EARLY WARNING SYSTEM</small></Link>
+      <nav aria-label="Main navigation"><Link href="/" aria-current="page" className="active"><Home size={16}/>Overview</Link><Link href="/us"><span>🇺🇸</span>U.S. Market</Link><a href="#korea"><span>🇰🇷</span>Korea Market</a><Link href="/validation"><BarChart3 size={16}/>Model Validation</Link><Link href="/methodology"><FlaskConical size={16}/>Methodology</Link></nav>
+    </header>
+    <div className="home-content">
+      <section className="home-hero">
+        <div className="hero-copy"><div className="eyebrow">GLOBAL MARKETS · FORWARD-LOOKING INTELLIGENCE</div><h1>Market stress.<br/><span>An earlier warning.</span></h1><h2>MARKET STRESS EARLY WARNING</h2><p>Will broad financial-market stress emerge within the next 10 trading days?</p><Link href="/methodology" className="blue-button"><BookOpen size={15}/>How it works<ArrowRight size={15}/></Link></div>
+        <MarketGlobe/>
+        <aside className="hero-snapshot"><div className="observation"><Clock3 size={15}/><span>LAST MARKET OBSERVATION<strong>{latest?.last_updated || '--'}</strong></span><span className={`data-status ${!latest ? 'offline' : ''}`}><i/>{loading ? 'Loading' : latest ? 'API connected' : 'Unavailable'}</span></div><div className="snapshot-panel"><div className="eyebrow">KEY INDICATORS · U.S. MARKET</div><div className="snapshot-metrics">{metrics.map(metric => <div key={metric.label}><span>{metric.label}</span><strong>{metric.value}</strong><Sparkline data={history.slice(-40)} field={metric.field}/></div>)}</div><small>Latest observation · sparklines show last 40 OOS observations</small></div></aside>
+      </section>
+      {errors.length > 0 && <div className="api-notice" role="status">{errors.join(', ')} unavailable. <button onClick={() => setRefresh(value => value + 1)} disabled={loading}>{loading ? 'Retrying…' : 'Retry connection'}</button></div>}
+      <section className="market-grid" aria-label="Market overview">
+        <article className={`market-card us-card tone-${tone}`}><div className="city-image us-image"/><div className="market-card-content"><div className="card-heading"><h2><span className="flag">🇺🇸</span> U.S. MARKET<ChevronRight size={18}/></h2><span className={`risk-badge ${tone}`}>{level === '--' ? 'UNAVAILABLE' : `${level} RISK`}</span></div><div className="us-card-body"><div className="score-block"><span className="score-label">10-Day Risk Score</span><div className={`risk-number ${tone}`}>{format(score, 1)}<small>/ 100</small></div><p>Forward-looking market<br/>stress warning.</p><div className="current-msi">CURRENT STRESS · MSI <strong>{format(latest?.market_stress_index, 2)}</strong></div></div><div className="us-metrics"><div className="eyebrow">MARKET SNAPSHOT</div>{metrics.map(metric => <div key={metric.label}><span>{metric.label === 'Baa–Treasury' ? 'Credit Spread' : metric.label}</span><strong>{metric.value}</strong></div>)}<Link href="/us" className="market-button">Explore U.S. Market<ArrowRight size={17}/></Link></div></div><div className="score-footnote">LOW &lt;30 <span>WATCH 30–&lt;50</span><span>ELEVATED 50–&lt;70</span><span>HIGH ≥70</span></div></div></article>
+        <article className="market-card korea-card" id="korea"><div className="city-image korea-image"/><div className="market-card-content"><div className="card-heading"><h2><span className="flag">🇰🇷</span> KOREA MARKET</h2><span className="risk-badge amber">COMING SOON</span></div><div className="korea-body"><span className="eyebrow">THE NEXT MARKET HORIZON</span><h3>Local markets.<br/>The same rigorous lens.</h3><p>Korean-market stress model<br/>pending data and validation.</p></div><div className="korea-preview"><span>KOSPI <small>--</small></span><span>VKOSPI <small>--</small></span><span>Credit <small>--</small></span><span className="pending"><Clock3 size={14}/>Model in development</span></div></div></article>
+      </section>
+      <section className="drivers-panel"><div className="drivers-title"><h2>CURRENT RISK DRIVERS</h2><p>Leading SHAP contributions{shap?.date ? ` · ${shap.date}` : ''}</p></div><div className="driver-groups">{groups.map(group => {
+        const drivers = shap?.top_drivers.filter(driver => group.match(driver.feature) && finite(driver.shap_value)) ?? [];
+        const net = drivers.reduce((sum, driver) => sum + driver.shap_value, 0);
+        const color = !drivers.length || net === 0 ? 'muted' : net > 0 ? 'red' : 'green';
+        const Icon = group.icon;
+        return <div className={`driver channel-${color}`} key={group.label}><span className="driver-icon"><Icon size={20}/></span><div><span>{group.label}</span><strong className={color}>{!drivers.length ? '--' : net === 0 ? '→ Neutral' : <>{net > 0 ? <ArrowUp size={13}/> : <ArrowDown size={13}/>}Net Risk-{net > 0 ? 'Increasing' : 'Reducing'}</>}</strong></div></div>;
+      })}</div><small>Net effect of leading factors on model output, not probability changes.</small></section>
+      <section className="history-grid">
+        <article className="history-panel"><div className="chart-heading"><div><h2><span className="blue-dot"/>HISTORICAL MARKET STRESS</h2><p>U.S. · XGBoost 10-Day Risk Score vs SPY</p></div><div className="range-buttons" aria-label="Historical chart time range">{(['1Y', '3Y', '5Y', 'ALL'] as Range[]).map(value => <button key={value} onClick={() => setRange(value)} aria-pressed={range === value} className={range === value ? 'selected' : ''}>{value}</button>)}</div></div><div className="chart-legend"><span><i/>10-Day Risk Score · left axis / 100</span><span><i/>SPY · right axis USD</span></div><div className="history-chart">{filtered.length ? <ResponsiveContainer width="100%" height="100%"><ComposedChart data={filtered} margin={{ top: 12, right: 0, bottom: 0, left: -18 }}><defs><linearGradient id="home-risk-gradient" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stopColor="#1dd6b0" stopOpacity={.3}/><stop offset="100%" stopColor="#1dd6b0" stopOpacity={0}/></linearGradient></defs><CartesianGrid stroke="#1a2a37" vertical={false}/><XAxis dataKey="date" tickFormatter={date => date.slice(0, 4)} minTickGap={55} tick={{ fill: '#7890a4', fontSize: 11 }} axisLine={false} tickLine={false}/><YAxis yAxisId="risk" domain={[0, 100]} ticks={[0, 25, 50, 75, 100]} tick={{ fill: '#7890a4', fontSize: 11 }} axisLine={false} tickLine={false}/><YAxis yAxisId="spy" orientation="right" domain={['auto', 'auto']} tick={{ fill: '#7890a4', fontSize: 11 }} axisLine={false} tickLine={false}/><Tooltip contentStyle={{ background: '#0b1a27f2', border: '1px solid #3c5b70', borderRadius: 10, color: '#e4eef6', boxShadow: '0 12px 32px #0008', padding: '12px 16px', fontSize: 12, backdropFilter: 'blur(12px)' }} formatter={(value: number, name: string) => [finite(value) ? value.toFixed(name === 'SPY' ? 2 : 1) : '--', name === 'SPY' ? 'SPY (USD)' : '10-Day Risk Score / 100']}/><Area yAxisId="risk" type="linear" dataKey="risk_score_xgboost" name="10-Day Risk Score" stroke="#47e1bf" strokeWidth={2.2} fill="url(#home-risk-gradient)" isAnimationActive={false}/><Line yAxisId="spy" type="linear" dataKey="spy" name="SPY" stroke="#eab451" strokeWidth={1.7} dot={false} isAnimationActive={false}/></ComposedChart></ResponsiveContainer> : <div className="chart-empty"><BarChart3 size={30}/><span>{loading ? 'Loading historical observations…' : 'Historical data unavailable'}</span><small>Real walk-forward out-of-sample data appears here.</small></div>}</div><div className="chart-note"><Database size={12}/>Purged walk-forward OOS predictions · Risk Score is not calibrated event probability.</div></article>
+        <aside className="insights-panel" id="insights"><div className="insights-heading"><h2>KEY INSIGHTS</h2><Lightbulb size={18}/></div><div className="insight"><span>01</span><div><h3>A warning, not a price forecast.</h3><p>The model assesses broad U.S. financial-market stress over the next 10 trading days.</p></div></div><div className="insight"><span>02</span><div><h3>Two distinct perspectives.</h3><p>MSI measures current stress. The Risk Score looks ahead.</p></div></div><div className="insight"><span>03</span><div><h3>Validation comes first.</h3><p>Historical scores use walk-forward OOS predictions. Korea awaits data and validation.</p></div></div><Link href="/validation">Explore the evidence<ArrowRight size={15}/></Link></aside>
+      </section>
+      <section className="bottom-grid" aria-label="Explore the project"><Link href="/validation" className="bottom-card"><span className="bottom-icon blue"><BarChart3/></span><div><h2>Model Validation</h2><p>Out-of-sample performance<br/>and historical event analysis.</p></div><ChevronRight/></Link><Link href="/methodology" className="bottom-card"><span className="bottom-icon purple"><BookOpen/></span><div><h2>Methodology</h2><p>Data, target definition<br/>and modeling approach.</p></div><ChevronRight/></Link><button className="bottom-card" onClick={() => setInsightsOpen(value => !value)} aria-expanded={insightsOpen} aria-controls="expanded-insights"><span className="bottom-icon gold"><Lightbulb/></span><div><h2>Key Insights</h2><p>Understand the current assessment<br/>and what the signals mean.</p></div><ChevronRight/></button></section>
+      {insightsOpen && <section id="expanded-insights" className="expanded-insights"><h2>Understanding the assessment</h2><p>{finite(score) ? `The latest U.S. Risk Score is ${score.toFixed(1)} / 100 (${level}).` : 'The latest U.S. Risk Score is unavailable.'} The score assesses broad stress events, not stock-price direction. SHAP channels aggregate only the leading factors returned by the API; factors within a channel can offset one another.</p><Link href="/methodology">Read the methodology <ArrowRight size={14}/></Link></section>}
+      <footer className="home-footer"><span><Globe2 size={13}/>MARKET RISK INTELLIGENCE</span><span>U.S. stress early warning · 10 trading days · XGBoost</span></footer>
     </div>
-  );
+  </div>;
 }
