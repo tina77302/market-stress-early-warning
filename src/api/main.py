@@ -422,3 +422,569 @@ def get_shap_drivers():
             "SHAP values are not probability-point changes."
         ),
     }
+
+# ==================================================
+# KOREA - Configuration
+# ==================================================
+
+KOREA_PROCESSED_DIR = (
+    DATA_PROCESSED_DIR / "korea"
+)
+
+KOREA_MODEL_DIR = (
+    MODELS_DIR.parent / "korea"
+)
+
+
+KOREA_FEATURE_COLS = [
+    # KOSPI200
+    "KOSPI200_1D_Return",
+    "KOSPI200_5D_Return",
+    "KOSPI200_20D_Return",
+    "KOSPI200_20D_Vol",
+    "KOSPI200_60D_Vol",
+    "KOSPI200_Drawdown",
+    "KOSPI200_20D_Momentum",
+
+    # VKOSPI
+    "VKOSPI_Level",
+    "VKOSPI_1D_Change",
+    "VKOSPI_5D_Change",
+    "VKOSPI_20D_Momentum",
+    "VKOSPI_252D_ZScore",
+
+    # Korea Credit Spread
+    "Credit_Level",
+    "Credit_1D_Change",
+    "Credit_5D_Change",
+    "Credit_20D_Momentum",
+    "Credit_252D_ZScore",
+]
+
+
+# ==================================================
+# KOREA - Data loaders
+# ==================================================
+
+def load_korea_latest_features():
+    """
+    Korea feature observations through the latest
+    available market date.
+
+    The latest row is used for current inference.
+    """
+
+    path = (
+        KOREA_PROCESSED_DIR
+        / "korea_latest_features.csv"
+    )
+
+    if not path.exists():
+        raise HTTPException(
+            status_code=404,
+            detail=(
+                "Korea latest features file not found. "
+                "Run Korea feature engineering first."
+            ),
+        )
+
+    return pd.read_csv(
+        path,
+        index_col="Date",
+        parse_dates=True,
+    )
+
+
+def load_korea_msi_data():
+    """
+    Korea Market Stress Index through the latest
+    available market observation.
+    """
+
+    path = (
+        KOREA_PROCESSED_DIR
+        / "korea_stress_index.csv"
+    )
+
+    if not path.exists():
+        raise HTTPException(
+            status_code=404,
+            detail=(
+                "Korea stress index file not found. "
+                "Run Korea stress index generation first."
+            ),
+        )
+
+    return pd.read_csv(
+        path,
+        index_col="Date",
+        parse_dates=True,
+    )
+
+
+def load_korea_xgboost_model():
+    """
+    Korea deployment XGBoost model fitted on all
+    currently labeled Korea training observations.
+    """
+
+    path = (
+        KOREA_MODEL_DIR
+        / "xgboost_10d_latest.joblib"
+    )
+
+    if not path.exists():
+        raise HTTPException(
+            status_code=404,
+            detail=(
+                "Korea XGBoost deployment model not found. "
+                "Run Korea walk-forward training first."
+            ),
+        )
+
+    return joblib.load(
+        path
+    )
+
+
+# ==================================================
+# KOREA - Current Market Risk
+# ==================================================
+
+@app.get("/api/korea/latest")
+def get_korea_latest_risk():
+    """
+    Latest available Korea market observation.
+
+    The Korea 10D Risk Score is generated from the
+    latest 17-feature vector using the saved Korea
+    XGBoost deployment model.
+
+    The model output is reported as a Risk Score,
+    not as a calibrated event probability.
+    """
+
+    feature_df = (
+        load_korea_latest_features()
+    )
+
+    if feature_df.empty:
+        raise HTTPException(
+            status_code=500,
+            detail=(
+                "Korea latest feature dataset is empty."
+            ),
+        )
+
+    missing_features = [
+        col
+        for col in KOREA_FEATURE_COLS
+        if col not in feature_df.columns
+    ]
+
+    if missing_features:
+        raise HTTPException(
+            status_code=500,
+            detail=(
+                "Missing Korea inference features: "
+                + ", ".join(missing_features)
+            ),
+        )
+
+    latest_row = (
+        feature_df.iloc[-1]
+    )
+
+    latest_date = (
+        feature_df.index[-1]
+    )
+
+    # Exact training feature order
+    X_latest = feature_df.loc[
+        [latest_date],
+        KOREA_FEATURE_COLS,
+    ]
+
+    model = (
+        load_korea_xgboost_model()
+    )
+
+    risk_score = float(
+        model.predict_proba(
+            X_latest
+        )[0, 1]
+    )
+
+    # --------------------------------------------------
+    # Latest Korea MSI must align with inference date.
+    # --------------------------------------------------
+
+    msi_df = (
+        load_korea_msi_data()
+    )
+
+    if latest_date not in msi_df.index:
+        raise HTTPException(
+            status_code=500,
+            detail=(
+                "Korea MSI is unavailable for the latest "
+                "feature observation date."
+            ),
+        )
+
+    msi_row = (
+        msi_df.loc[latest_date]
+    )
+
+    korea_msi = float(
+        msi_row["Korea_MSI"]
+    )
+
+    stress_threshold = float(
+        msi_row["Stress_Threshold"]
+    )
+
+    is_stress_event = bool(
+        int(msi_row["Is_Stress_Event"])
+    )
+
+    return {
+        "market": "South Korea",
+
+        "last_updated":
+            latest_date.strftime(
+                "%Y-%m-%d"
+            ),
+
+        "kospi200": round(
+            float(
+                latest_row["KOSPI200"]
+            ),
+            2,
+        ),
+
+        "vkospi": round(
+            float(
+                latest_row["VKOSPI"]
+            ),
+            2,
+        ),
+
+        "korea_credit_spread": round(
+            float(
+                latest_row[
+                    "Korea_Credit_Spread"
+                ]
+            ),
+            3,
+        ),
+
+        "korea_credit_spread_bp": round(
+            float(
+                latest_row[
+                    "Korea_Credit_Spread"
+                ]
+            )
+            * 100,
+            1,
+        ),
+
+        "market_stress_index": round(
+            korea_msi,
+            3,
+        ),
+
+        "stress_threshold": round(
+            stress_threshold,
+            3,
+        ),
+
+        "is_stress_event":
+            is_stress_event,
+
+        # 0-100 model Risk Score.
+        # Not interpreted as a calibrated probability.
+        "risk_score_10d": round(
+            risk_score * 100,
+            1,
+        ),
+
+        "warning_threshold": 50.0,
+
+        "warning_active": bool(
+            risk_score >= 0.50
+        ),
+
+        "risk_score_note": (
+            "Higher scores indicate greater model-estimated "
+            "risk of a South Korean financial market stress "
+            "event within the next 10 trading days. "
+            "The score is not a calibrated event probability."
+        ),
+
+        "stress_event_note": (
+            "The current Stress Event state is based on "
+            "whether Korea MSI reaches or exceeds its "
+            "past-only expanding 90th-percentile threshold."
+        ),
+    }
+    
+# ==================================================
+# KOREA - SHAP Risk Drivers
+# ==================================================
+
+@app.get("/api/korea/shap")
+def get_korea_shap_drivers():
+    """
+    Latest Korea XGBoost SHAP explanation.
+
+    Positive SHAP values increase the model output;
+    negative SHAP values decrease it.
+
+    SHAP values are model-output contributions,
+    not percentage-point changes in event probability.
+    """
+
+    path = (
+        KOREA_PROCESSED_DIR
+        / "shap"
+        / "latest_shap.json"
+    )
+
+    if not path.exists():
+        raise HTTPException(
+            status_code=404,
+            detail=(
+                "Latest Korea SHAP explanation not found. "
+                "Run Korea SHAP analysis first."
+            ),
+        )
+
+    try:
+        with open(path, "r") as f:
+            payload = json.load(f)
+    except Exception as exc:
+        raise HTTPException(
+            status_code=500,
+            detail=(
+                f"Failed to load Korea SHAP explanation: {exc}"
+            ),
+        )
+
+    return {
+        **payload,
+        "interpretation_note": (
+            "Positive SHAP values push the Korea model "
+            "risk score higher and negative values push "
+            "it lower. SHAP values are model-output "
+            "contributions, not probability-point changes."
+        ),
+    }
+    
+# ==================================================
+# KOREA - Historical OOS Data
+# ==================================================
+
+@app.get("/api/korea/historical")
+def get_korea_historical_data(days: int = 1260):
+    """
+    Historical Korea purged walk-forward
+    out-of-sample predictions.
+
+    Model outputs are exposed as Risk Scores,
+    not calibrated event probabilities.
+    """
+
+    path = (
+        KOREA_PROCESSED_DIR
+        / "korea_oos_predictions_10d.csv"
+    )
+
+    if not path.exists():
+        raise HTTPException(
+            status_code=404,
+            detail=(
+                "Korea OOS predictions file not found. "
+                "Run Korea walk-forward validation first."
+            ),
+        )
+
+    df = pd.read_csv(
+        path,
+        index_col="Date",
+        parse_dates=True,
+    )
+
+    if days > 0:
+        df = df.iloc[-days:]
+
+    chart_data = []
+
+    for date, row in df.iterrows():
+        chart_data.append(
+            {
+                "date": date.strftime("%Y-%m-%d"),
+
+                "kospi200": round(
+                    float(row["KOSPI200"]),
+                    2,
+                ),
+
+                "vkospi": round(
+                    float(row["VKOSPI"]),
+                    2,
+                ),
+
+                "korea_credit_spread": round(
+                    float(row["Korea_Credit_Spread"]),
+                    3,
+                ),
+
+                "korea_credit_spread_bp": round(
+                    float(row["Korea_Credit_Spread"]) * 100,
+                    1,
+                ),
+
+                "msi": round(
+                    float(row["Korea_MSI"]),
+                    3,
+                ),
+
+                "risk_score_logistic": round(
+                    float(row["Prob_Logistic"]) * 100,
+                    1,
+                ),
+
+                "risk_score_xgboost": round(
+                    float(row["Prob_XGBoost"]) * 100,
+                    1,
+                ),
+
+                "target": int(
+                    row["Actual_Target"]
+                ),
+            }
+        )
+
+    return {
+        "market": "South Korea",
+        "forecast_horizon": "10D",
+        "data_type": "purged_walk_forward_oos",
+        "count": len(chart_data),
+        "data": chart_data,
+    }
+    
+# ==================================================
+# KOREA - Model Validation
+# ==================================================
+
+@app.get("/api/korea/validation")
+def get_korea_validation():
+    """
+    Korea 10D purged walk-forward out-of-sample
+    model validation metrics.
+
+    Threshold-based metrics use the fixed
+    0.50 reference warning cutoff.
+    """
+
+    path = (
+        KOREA_PROCESSED_DIR
+        / "korea_model_evaluation_10d.csv"
+    )
+
+    if not path.exists():
+        raise HTTPException(
+            status_code=404,
+            detail=(
+                "Korea model evaluation file not found. "
+                "Run Korea model evaluation first."
+            ),
+        )
+
+    df = pd.read_csv(path)
+
+    metrics = []
+
+    for _, row in df.iterrows():
+        metrics.append(
+            {
+                "model": str(row["Model"]),
+
+                "roc_auc": round(
+                    float(row["ROC-AUC"]),
+                    6,
+                ),
+
+                "pr_auc": round(
+                    float(row["PR-AUC (AP)"]),
+                    6,
+                ),
+
+                "brier_score": round(
+                    float(row["Brier Score"]),
+                    6,
+                ),
+
+                "threshold": round(
+                    float(row["Threshold"]),
+                    2,
+                ),
+
+                "tp": int(row["TP"]),
+                "fp": int(row["FP"]),
+                "tn": int(row["TN"]),
+                "fn": int(row["FN"]),
+
+                "precision": round(
+                    float(row["Precision"]),
+                    6,
+                ),
+
+                "recall": round(
+                    float(row["Recall"]),
+                    6,
+                ),
+
+                "f1": round(
+                    float(row["F1"]),
+                    6,
+                ),
+
+                "false_alarm_rate": round(
+                    float(row["False Alarm Rate"]),
+                    6,
+                ),
+
+                "missed_event_rate": round(
+                    float(row["Missed Event Rate"]),
+                    6,
+                ),
+            }
+        )
+
+    return {
+        "market": "South Korea",
+        "forecast_horizon": "10D",
+        "validation_method":
+            "Purged expanding walk-forward OOS",
+
+        "oos_start": "2016-09-13",
+        "oos_end": "2026-09-16",
+
+        "oos_observations": 2454,
+        "positive_observations": 617,
+        "target_prevalence": 0.251426,
+
+        "warning_threshold": 0.50,
+
+        "models": metrics,
+
+        "interpretation_note": (
+            "Metrics are based on purged expanding "
+            "walk-forward out-of-sample predictions. "
+            "The 0.50 threshold is a fixed reference "
+            "warning cutoff and was not selected "
+            "post-hoc from OOS results."
+        ),
+    }
