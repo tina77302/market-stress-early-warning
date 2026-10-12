@@ -1,4 +1,5 @@
 import json
+from contextlib import asynccontextmanager
 import pandas as pd
 import joblib
 
@@ -11,13 +12,34 @@ from src.config import (
     MODELS_DIR,
 )
 from src.models.evaluation import ModelEvaluator
+from src.paper.admin import router as admin_router, bootstrap_admin
+
+
+@asynccontextmanager
+async def application_lifespan(app):
+    bootstrap_admin()
+    import os
+    from src.operations.scheduler import start
+    stop = start() if os.getenv("MARKET_REFRESH_ENABLED", "false").lower() == "true" else None
+    try:
+        yield
+    finally:
+        if stop:
+            stop.set()
 
 
 app = FastAPI(
     title="U.S. Market Stress Early Warning API",
     description="AI 기반 미국 금융시장 스트레스 조기경보 API",
     version="1.0.0",
+    lifespan=application_lifespan,
 )
+
+
+# Account/paper services are isolated from the market-model endpoints.
+from src.paper.router import router as paper_router
+app.include_router(paper_router)
+app.include_router(admin_router)
 
 
 # ==================================================
@@ -167,8 +189,7 @@ def health_check():
 # PAGE 01 - Current Market Risk
 # ==================================================
 
-@app.get("/api/latest")
-def get_latest_risk():
+def calculate_latest_risk():
     """
     Latest available market observation.
 
@@ -551,8 +572,7 @@ def load_korea_xgboost_model():
 # KOREA - Current Market Risk
 # ==================================================
 
-@app.get("/api/korea/latest")
-def get_korea_latest_risk():
+def calculate_korea_latest_risk():
     """
     Latest available Korea market observation.
 
@@ -988,3 +1008,21 @@ def get_korea_validation():
             "post-hoc from OOS results."
         ),
     }
+
+# Current endpoints read one committed snapshot; they never mix live CSV generations.
+@app.get("/api/latest")
+def get_latest_risk():
+    from src.operations.service import current_payload
+    return current_payload('us')
+
+
+@app.get("/api/korea/latest")
+def get_korea_latest_risk():
+    from src.operations.service import current_payload
+    return current_payload('korea')
+
+
+@app.get("/api/data-health")
+def get_data_health():
+    from src.operations.service import health
+    return {market: health(market) for market in ['us', 'korea']}

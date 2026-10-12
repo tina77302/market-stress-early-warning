@@ -1,14 +1,20 @@
 'use client';
 
+import { LocalizedText, useI18n } from './i18n/provider';
+
+
 import { useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
-import { Activity, ArrowDown, ArrowRight, ArrowUp, BarChart3, BookOpen, ChevronRight, Clock3, Database, FlaskConical, Globe2, Home, Lightbulb, ShieldAlert } from 'lucide-react';
+import { Activity, ArrowDown, ArrowRight, ArrowUp, BarChart3, BookOpen, ChevronRight, Clock3, Database, Globe2, Lightbulb } from 'lucide-react';
 import { Area, CartesianGrid, ComposedChart, Line, LineChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts';
 
+import CrossMarketSnapshot, { GlobalAssessment, ModelDisclaimer } from './components/CrossMarketSnapshot';
+
 const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://127.0.0.1:8000';
-interface Latest { last_updated: string; risk_score_10d: number | null; spy_price: number | null; vix_level: number | null; baa_treasury_spread: number | null; market_stress_index: number | null }
+interface Latest { data_health?: import('./components/market-data').DataHealth; last_updated: string; risk_score_10d: number | null; spy_price: number | null; vix_level: number | null; baa_treasury_spread: number | null; market_stress_index: number | null }
 
 interface KoreaLatest {
+  data_health?: import('./components/market-data').DataHealth;
   last_updated: string;
   risk_score_10d: number | null;
   kospi200: number | null;
@@ -29,7 +35,9 @@ const finite = (value: unknown): value is number => typeof value === 'number' &&
 const format = (value: unknown, digits = 2, prefix = '', suffix = '') => finite(value) ? `${prefix}${value.toFixed(digits)}${suffix}` : '--';
 
 function MarketGlobe() {
-  return <div className="market-globe" aria-label="Global markets illustration: U.S. and Korea market-stress models available" role="img">
+  const { t, locale } = useI18n();
+
+  return <div className="market-globe" aria-label={t("Global markets illustration: U.S. and Korea market-stress models available")} role="img">
     <svg viewBox="0 0 520 360" aria-hidden="true">
       <defs>
         <radialGradient id="home-ocean" cx="32%" cy="28%"><stop stopColor="#123d61"/><stop offset=".7" stopColor="#071d31"/><stop offset="1" stopColor="#030b14"/></radialGradient>
@@ -69,16 +77,20 @@ function MarketGlobe() {
       <circle cx="166" cy="138" r="17" fill="#1de0b2" filter="url(#home-glow)"/><circle cx="166" cy="138" r="4" fill="#9affdf"/>
       <circle cx="382" cy="147" r="15" fill="#f4b844" filter="url(#home-glow)"/><circle cx="382" cy="147" r="4" fill="#ffe2a0"/>
     </svg>
-    <span className="globe-label globe-us"><span>🇺🇸</span> U.S.</span><span className="globe-label globe-kr"><span>🇰🇷</span> Korea</span>
+    <span className="globe-label globe-us"><span>🇺🇸</span><LocalizedText id="u_s_7a3239" before/></span><span className="globe-label globe-kr"><span>🇰🇷</span><LocalizedText id="korea_4e8bd0" before/></span>
   </div>;
 }
 
 function Sparkline({ data, field }: { data: Historical[]; field: 'spy' | 'vix' | 'baa_treasury_spread' }) {
-  if (!data.some(point => finite(point[field]))) return <div className="spark-empty">Historical data unavailable</div>;
+  const { t, locale } = useI18n();
+
+  if (!data.some(point => finite(point[field]))) return <div className="spark-empty"><LocalizedText id="historical_data_unavailable_46b250"/></div>;
   return <div className="metric-spark" aria-hidden="true"><ResponsiveContainer width="100%" height="100%"><LineChart data={data}><YAxis hide domain={['dataMin', 'dataMax']}/><Line dataKey={field} dot={false} stroke="#2ccab5" strokeWidth={1.6} isAnimationActive={false}/></LineChart></ResponsiveContainer></div>;
 }
 
 export default function MarketRiskPage() {
+  const { t, locale } = useI18n();
+
   const [latest, setLatest] = useState<Latest | null>(null);
   const [koreaLatest, setKoreaLatest] = useState<KoreaLatest | null>(null);
   const [history, setHistory] = useState<Historical[]>([]);
@@ -107,7 +119,7 @@ export default function MarketRiskPage() {
       const [current, historical, drivers, korea] = results;
       setLatest(current.status === 'fulfilled' ? current.value : null);
       setHistory(historical.status === 'fulfilled' && Array.isArray(historical.value.data) ? [...historical.value.data].sort((a: Historical, b: Historical) => a.date.localeCompare(b.date)) : []);
-      setShap(drivers.status === 'fulfilled' && Array.isArray(drivers.value.top_drivers) ? drivers.value : null);
+      setShap(drivers.status === 'fulfilled' && current.status === 'fulfilled' && drivers.value.date === current.value.last_updated && Array.isArray(drivers.value.top_drivers) ? drivers.value : null);
       setKoreaLatest(korea.status === 'fulfilled' ? korea.value : null);
       setErrors(
         results.flatMap((result, i) =>
@@ -121,11 +133,11 @@ export default function MarketRiskPage() {
     void load();
     return () => controller.abort();
   }, [refresh]);
-  const score = latest?.risk_score_10d;
+  const score = latest?.data_health?.is_current ? latest.risk_score_10d : null;
   const level = !finite(score) ? '--' : score >= 70 ? 'HIGH' : score >= 50 ? 'ELEVATED' : score >= 30 ? 'WATCH' : 'LOW';
   const tone = level === 'LOW' ? 'green' : level === 'WATCH' ? 'amber' : level === '--' ? 'muted' : 'red';
 
-  const koreaScore = koreaLatest?.risk_score_10d;
+  const koreaScore = koreaLatest?.data_health?.is_current ? koreaLatest.risk_score_10d : null;
   const koreaWarning = koreaLatest?.warning_active === true;
   const koreaTone = !finite(koreaScore) ? 'muted' : koreaWarning ? 'red' : 'green';
   const koreaStatus = !finite(koreaScore)
@@ -151,91 +163,76 @@ export default function MarketRiskPage() {
     { label: 'Credit Conditions', icon: Database, match: (f: string) => /^(Credit_|BAA_)/.test(f) },
   ];
   return <div className="risk-home">
-    <header className="home-nav">
-      <Link href="/" className="home-brand"><ShieldAlert size={27}/><span>MARKET RISK INTELLIGENCE</span><small>AI EARLY WARNING SYSTEM</small></Link>
-      <nav aria-label="Main navigation"><Link href="/" aria-current="page" className="active"><Home size={16}/>Overview</Link><Link href="/us"><span>🇺🇸</span>U.S. Market</Link><Link href="/korea"><span>🇰🇷</span>Korea Market</Link><Link href="/validation"><BarChart3 size={16}/>Model Validation</Link><Link href="/methodology"><FlaskConical size={16}/>Methodology</Link></nav>
-    </header>
     <div className="home-content">
       <section className="home-hero">
-        <div className="hero-copy"><div className="eyebrow">GLOBAL MARKETS · FORWARD-LOOKING INTELLIGENCE</div><h1>Market stress.<br/><span>An earlier warning.</span></h1><h2>MARKET STRESS EARLY WARNING</h2><p>Will broad financial-market stress emerge within the next 10 trading days?</p><Link href="/methodology" className="blue-button"><BookOpen size={15}/>How it works<ArrowRight size={15}/></Link></div>
+        <div className="hero-copy"><div className="eyebrow"><LocalizedText id="global_markets_forward_looking_intelligence_7a56d1"/></div><h1><LocalizedText id="market_stress_c09ca4"/><br/><span><LocalizedText id="an_earlier_warning_18baf8"/></span></h1><h2><LocalizedText id="market_stress_early_warning_72b129"/></h2><p><LocalizedText id="will_broad_financial_market_stress_emerge_within_the_next_10_trad_4cf995"/></p><Link href="/methodology" className="blue-button"><BookOpen size={15}/><LocalizedText id="how_it_works_1dd6a1"/><ArrowRight size={15}/></Link></div>
         <MarketGlobe/>
-        <aside className="hero-snapshot"><div className="observation"><Clock3 size={15}/><span>U.S. LAST MARKET OBSERVATION<strong>{latest?.last_updated || '--'}</strong></span><span className={`data-status ${!latest ? 'offline' : ''}`}><i/>{loading ? 'Loading' : latest ? 'API connected' : 'Unavailable'}</span></div><div className="snapshot-panel"><div className="eyebrow">KEY INDICATORS · U.S. MARKET</div><div className="snapshot-metrics">{metrics.map(metric => <div key={metric.label}><span>{metric.label}</span><strong>{metric.value}</strong><Sparkline data={history.slice(-40)} field={metric.field}/></div>)}</div><small>Latest observation · sparklines show last 40 OOS observations</small></div></aside>
+        <aside className="hero-snapshot"><div className="observation"><Clock3 size={15}/><span><LocalizedText id="u_s_last_market_observation_9a6f66"/><strong><LocalizedText>{latest?.last_updated || '--'}</LocalizedText></strong></span><span className={`data-status ${!latest?.data_health?.is_current ? 'offline' : ''}`}><i/><LocalizedText>{loading ? 'Loading' : latest?.data_health?.is_current ? 'API connected' : latest?.data_health?.status || 'Unavailable'}</LocalizedText></span></div><div className="snapshot-panel"><div className="eyebrow"><LocalizedText id="key_indicators_u_s_market_431446"/></div><div className="snapshot-metrics">{metrics.map(metric => <div key={metric.label}><span><LocalizedText>{metric.label}</LocalizedText></span><strong><LocalizedText>{metric.value}</LocalizedText></strong><Sparkline data={history.slice(-40)} field={metric.field}/></div>)}</div><small><LocalizedText id="latest_observation_sparklines_show_last_40_oos_observations_8d9027"/></small></div></aside>
       </section>
-      {errors.length > 0 && <div className="api-notice" role="status">{errors.join(', ')} unavailable. <button onClick={() => setRefresh(value => value + 1)} disabled={loading}>{loading ? 'Retrying…' : 'Retry connection'}</button></div>}
-      <section className="market-grid" aria-label="Market overview">
-        <article className={`market-card us-card tone-${tone}`}><div className="city-image us-image"/><div className="market-card-content"><div className="card-heading"><h2><span className="flag">🇺🇸</span> U.S. MARKET<ChevronRight size={18}/></h2><span className={`risk-badge ${tone}`}>{level === '--' ? 'UNAVAILABLE' : `${level} RISK`}</span></div><div className="us-card-body"><div className="score-block"><span className="score-label">10-Day Risk Score</span><div className={`risk-number ${tone}`}>{format(score, 1)}<small>/ 100</small></div><p>Forward-looking market<br/>stress warning.</p><div className="current-msi">CURRENT STRESS · MSI <strong>{format(latest?.market_stress_index, 2)}</strong></div></div><div className="us-metrics"><div className="eyebrow">MARKET SNAPSHOT</div>{metrics.map(metric => <div key={metric.label}><span>{metric.label === 'Baa–Treasury' ? 'Credit Spread' : metric.label}</span><strong>{metric.value}</strong></div>)}<Link href="/us" className="market-button">Explore U.S. Market<ArrowRight size={17}/></Link></div></div><div className="score-footnote">LOW &lt;30 <span>WATCH 30–&lt;50</span><span>ELEVATED 50–&lt;70</span><span>HIGH ≥70</span></div></div></article>
+      {errors.length > 0 && <div className="api-notice" role="status"><LocalizedText>{errors.join(', ')}</LocalizedText><LocalizedText id="unavailable_9cd983" before after/><button onClick={() => setRefresh(value => value + 1)} disabled={loading}><LocalizedText>{loading ? 'Retrying…' : 'Retry connection'}</LocalizedText></button></div>}
+      <section className="market-grid" aria-label={t("Market overview")}>
+        <article className={`market-card us-card tone-${tone}`}><div className="city-image us-image"/><div className="market-card-content"><div className="card-heading"><h2><span className="flag">🇺🇸</span><LocalizedText id="u_s_market_9b3642" before/><ChevronRight size={18}/></h2><span className={`risk-badge ${tone}`}><LocalizedText>{level === '--' ? 'UNAVAILABLE' : `${level} RISK`}</LocalizedText></span></div><div className="us-card-body"><div className="score-block"><span className="score-label"><LocalizedText id="10_day_risk_score_f5fce8"/></span><div className={`risk-number ${tone}`}><LocalizedText>{format(score, 1)}</LocalizedText><small>/ 100</small></div><p><LocalizedText id="forward_looking_market_06aca8"/><br/><LocalizedText id="stress_warning_3eea66"/></p><div className="current-msi"><LocalizedText id="current_stress_msi_2ac8c2" after/><strong><LocalizedText>{format(latest?.market_stress_index, 2)}</LocalizedText></strong></div></div><div className="us-metrics"><div className="eyebrow"><LocalizedText id="market_snapshot_745f02"/></div>{metrics.map(metric => <div key={metric.label}><span><LocalizedText>{metric.label === 'Baa–Treasury' ? 'Credit Spread' : metric.label}</LocalizedText></span><strong><LocalizedText>{metric.value}</LocalizedText></strong></div>)}<Link href="/us" className="market-button"><LocalizedText id="explore_u_s_market_70ffd9"/><ArrowRight size={17}/></Link></div></div><div className="score-footnote"><LocalizedText id="low_30_d9463e" after/><span><LocalizedText id="watch_30_50_23abd9"/></span><span><LocalizedText id="elevated_50_70_ee49cd"/></span><span><LocalizedText id="high_70_b19f6d"/></span></div></div></article>
         <article className={`market-card korea-card tone-${koreaTone}`} id="korea">
           <div className="city-image korea-image"/>
           <div className="market-card-content">
             <div className="card-heading">
               <h2>
-                <span className="flag">🇰🇷</span>
-                KOREA MARKET
-                <ChevronRight size={18}/>
+                <span className="flag">🇰🇷</span><LocalizedText id="korea_market_beaf00" before after/><ChevronRight size={18}/>
               </h2>
               <span className={`risk-badge ${koreaTone}`}>
-                {koreaStatus}
+                <LocalizedText>{koreaStatus}</LocalizedText>
               </span>
             </div>
 
             <div className="korea-body">
-              <span className="eyebrow">10-DAY MARKET STRESS RISK</span>
+              <span className="eyebrow"><LocalizedText id="10_day_market_stress_risk_05a549"/></span>
               <div className={`risk-number ${koreaTone}`}>
-                {format(koreaScore, 1)}
+                <LocalizedText>{format(koreaScore, 1)}</LocalizedText>
                 <small>/ 100</small>
               </div>
-              <p>
-                Forward-looking Korean<br/>
-                market-stress warning.
-              </p>
-              <div className="current-msi">
-                CURRENT STRESS · MSI{' '}
-                <strong>{format(koreaLatest?.market_stress_index, 3)}</strong>
+              <p><LocalizedText id="forward_looking_korean_5264a6" before/><br/><LocalizedText id="market_stress_warning_47172f" before after/></p>
+              <div className="current-msi"><LocalizedText id="current_stress_msi_2ac8c2" before/><LocalizedText>{' '}</LocalizedText>
+                <strong><LocalizedText>{format(koreaLatest?.market_stress_index, 3)}</LocalizedText></strong>
               </div>
             </div>
 
             <div className="korea-preview">
-              <span>
-                KOSPI 200
-                <small>{format(koreaLatest?.kospi200, 2)}</small>
+              <span><LocalizedText id="kospi_200_931c45" before after/><small><LocalizedText>{format(koreaLatest?.kospi200, 2)}</LocalizedText></small>
               </span>
 
-              <span>
-                VKOSPI
-                <small>{format(koreaLatest?.vkospi, 2)}</small>
+              <span><LocalizedText id="vkospi_94fdc0" before after/><small><LocalizedText>{format(koreaLatest?.vkospi, 2)}</LocalizedText></small>
               </span>
 
-              <span>
-                Credit
-                <small>
-                  {finite(koreaLatest?.korea_credit_spread_bp)
+              <span><LocalizedText id="credit_8a45d3" before after/><small>
+                  <LocalizedText>{finite(koreaLatest?.korea_credit_spread_bp)
                     ? `${koreaLatest.korea_credit_spread_bp.toFixed(1)} bp`
-                    : '--'}
+                    : '--'}</LocalizedText>
                 </small>
               </span>
 
-              <Link href="/korea" className="market-button">
-                Explore Korea Market
-                <ArrowRight size={17}/>
+              <Link href="/korea" className="market-button"><LocalizedText id="explore_korea_market_c2ece9" before after/><ArrowRight size={17}/>
               </Link>
             </div>
           </div>
         </article>
       </section>
-      <section className="drivers-panel"><div className="drivers-title"><h2>CURRENT RISK DRIVERS</h2><p>Leading SHAP contributions{shap?.date ? ` · ${shap.date}` : ''}</p></div><div className="driver-groups">{groups.map(group => {
+      <CrossMarketSnapshot us={latest} korea={koreaLatest}/>
+      <section className="drivers-panel"><div className="drivers-title"><h2><LocalizedText id="current_risk_drivers_ee132f"/></h2><p><LocalizedText id="leading_shap_contributions_781cf1"/><LocalizedText>{shap?.date ? ` · ${shap.date}` : ''}</LocalizedText></p></div><div className="driver-groups">{groups.map(group => {
         const drivers = shap?.top_drivers.filter(driver => group.match(driver.feature) && finite(driver.shap_value)) ?? [];
         const net = drivers.reduce((sum, driver) => sum + driver.shap_value, 0);
         const color = !drivers.length || net === 0 ? 'muted' : net > 0 ? 'red' : 'green';
         const Icon = group.icon;
-        return <div className={`driver channel-${color}`} key={group.label}><span className="driver-icon"><Icon size={20}/></span><div><span>{group.label}</span><strong className={color}>{!drivers.length ? '--' : net === 0 ? '→ Neutral' : <>{net > 0 ? <ArrowUp size={13}/> : <ArrowDown size={13}/>}Net Risk-{net > 0 ? 'Increasing' : 'Reducing'}</>}</strong></div></div>;
-      })}</div><small>Net effect of leading factors on model output, not probability changes.</small></section>
+        return <div className={`driver channel-${color}`} key={group.label}><span className="driver-icon"><Icon size={20}/></span><div><span><LocalizedText>{group.label}</LocalizedText></span><strong className={color}>{!drivers.length ? '--' : net === 0 ? '→ Neutral' : <>{net > 0 ? <ArrowUp size={13}/> : <ArrowDown size={13}/>}<LocalizedText id="net_risk_73ac73"/><LocalizedText>{net > 0 ? 'Increasing' : 'Reducing'}</LocalizedText></>}</strong></div></div>;
+      })}</div><small><LocalizedText id="net_effect_of_leading_factors_on_model_output_not_probability_cha_5d681b"/></small></section>
       <section className="history-grid">
-        <article className="history-panel"><div className="chart-heading"><div><h2><span className="blue-dot"/>HISTORICAL MARKET STRESS</h2><p>U.S. · XGBoost 10-Day Risk Score vs SPY</p></div><div className="range-buttons" aria-label="Historical chart time range">{(['1Y', '3Y', '5Y', 'ALL'] as Range[]).map(value => <button key={value} onClick={() => setRange(value)} aria-pressed={range === value} className={range === value ? 'selected' : ''}>{value}</button>)}</div></div><div className="chart-legend"><span><i/>10-Day Risk Score · left axis / 100</span><span><i/>SPY · right axis USD</span></div><div className="history-chart">{filtered.length ? <ResponsiveContainer width="100%" height="100%"><ComposedChart data={filtered} margin={{ top: 12, right: 0, bottom: 0, left: -18 }}><defs><linearGradient id="home-risk-gradient" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stopColor="#1dd6b0" stopOpacity={.3}/><stop offset="100%" stopColor="#1dd6b0" stopOpacity={0}/></linearGradient></defs><CartesianGrid stroke="#1a2a37" vertical={false}/><XAxis dataKey="date" tickFormatter={date => date.slice(0, 4)} minTickGap={55} tick={{ fill: '#7890a4', fontSize: 11 }} axisLine={false} tickLine={false}/><YAxis yAxisId="risk" domain={[0, 100]} ticks={[0, 25, 50, 75, 100]} tick={{ fill: '#7890a4', fontSize: 11 }} axisLine={false} tickLine={false}/><YAxis yAxisId="spy" orientation="right" domain={['auto', 'auto']} tick={{ fill: '#7890a4', fontSize: 11 }} axisLine={false} tickLine={false}/><Tooltip contentStyle={{ background: '#0b1a27f2', border: '1px solid #3c5b70', borderRadius: 10, color: '#e4eef6', boxShadow: '0 12px 32px #0008', padding: '12px 16px', fontSize: 12, backdropFilter: 'blur(12px)' }} formatter={(value: number, name: string) => [finite(value) ? value.toFixed(name === 'SPY' ? 2 : 1) : '--', name === 'SPY' ? 'SPY (USD)' : '10-Day Risk Score / 100']}/><Area yAxisId="risk" type="linear" dataKey="risk_score_xgboost" name="10-Day Risk Score" stroke="#47e1bf" strokeWidth={2.2} fill="url(#home-risk-gradient)" isAnimationActive={false}/><Line yAxisId="spy" type="linear" dataKey="spy" name="SPY" stroke="#eab451" strokeWidth={1.7} dot={false} isAnimationActive={false}/></ComposedChart></ResponsiveContainer> : <div className="chart-empty"><BarChart3 size={30}/><span>{loading ? 'Loading historical observations…' : 'Historical data unavailable'}</span><small>Real walk-forward out-of-sample data appears here.</small></div>}</div><div className="chart-note"><Database size={12}/>Purged walk-forward OOS predictions · Risk Score is not calibrated event probability.</div></article>
-        <aside className="insights-panel" id="insights"><div className="insights-heading"><h2>KEY INSIGHTS</h2><Lightbulb size={18}/></div><div className="insight"><span>01</span><div><h3>A warning, not a price forecast.</h3><p>The model assesses broad U.S. financial-market stress over the next 10 trading days.</p></div></div><div className="insight"><span>02</span><div><h3>Two distinct perspectives.</h3><p>MSI measures current stress. The Risk Score looks ahead.</p></div></div><div className="insight"><span>03</span><div><h3>Validation comes first.</h3><p>Historical scores use purged walk-forward out-of-sample predictions for model validation.</p></div></div><Link href="/validation">Explore the evidence<ArrowRight size={15}/></Link></aside>
+        <article className="history-panel"><div className="chart-heading"><div><h2><span className="blue-dot"/><LocalizedText id="historical_market_stress_88bd29"/></h2><p><LocalizedText id="u_s_xgboost_10_day_risk_score_vs_spy_04c60c"/></p></div><div className="range-buttons" aria-label={t("Historical chart time range")}>{(['1Y', '3Y', '5Y', 'ALL'] as Range[]).map(value => <button key={value} onClick={() => setRange(value)} aria-pressed={range === value} className={range === value ? 'selected' : ''}><LocalizedText>{value}</LocalizedText></button>)}</div></div><div className="chart-legend"><span><i/><LocalizedText id="10_day_risk_score_left_axis_100_2e8496"/></span><span><i/><LocalizedText id="spy_right_axis_usd_414bb2"/></span></div><div className="history-chart">{filtered.length ? <ResponsiveContainer width="100%" height="100%"><ComposedChart data={filtered} margin={{ top: 12, right: 0, bottom: 0, left: -18 }}><defs><linearGradient id="home-risk-gradient" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stopColor="#1dd6b0" stopOpacity={.3}/><stop offset="100%" stopColor="#1dd6b0" stopOpacity={0}/></linearGradient></defs><CartesianGrid stroke="#1a2a37" vertical={false}/><XAxis dataKey="date" tickFormatter={date => date.slice(0, 4)} minTickGap={55} tick={{ fill: '#7890a4', fontSize: 12 }} axisLine={false} tickLine={false}/><YAxis yAxisId="risk" domain={[0, 100]} ticks={[0, 25, 50, 75, 100]} tick={{ fill: '#7890a4', fontSize: 12 }} axisLine={false} tickLine={false}/><YAxis yAxisId="spy" orientation="right" domain={['auto', 'auto']} tick={{ fill: '#7890a4', fontSize: 12 }} axisLine={false} tickLine={false}/><Tooltip contentStyle={{ background: '#0b1a27f2', border: '1px solid #3c5b70', borderRadius: 10, color: '#e4eef6', boxShadow: '0 12px 32px #0008', padding: '12px 16px', fontSize: 12, backdropFilter: 'blur(12px)' }} formatter={(value: number, name: string) => [finite(value) ? value.toFixed(name === 'SPY' ? 2 : 1) : '--', t(name === 'SPY' ? 'SPY (USD)' : '10-Day Risk Score / 100')]}/><Area yAxisId="risk" type="linear" dataKey="risk_score_xgboost" name={t("10-Day Risk Score")} stroke="#47e1bf" strokeWidth={2.2} fill="url(#home-risk-gradient)" isAnimationActive={false}/><Line yAxisId="spy" type="linear" dataKey="spy" name={t("SPY")} stroke="#eab451" strokeWidth={1.7} dot={false} isAnimationActive={false}/></ComposedChart></ResponsiveContainer> : <div className="chart-empty"><BarChart3 size={30}/><span><LocalizedText>{loading ? 'Loading historical observations…' : 'Historical data unavailable'}</LocalizedText></span><small><LocalizedText id="real_walk_forward_out_of_sample_data_appears_here_34f7e9"/></small></div>}</div><div className="chart-note"><Database size={12}/><LocalizedText id="purged_walk_forward_oos_predictions_risk_score_is_not_calibrated__2966ed"/></div></article>
+        <aside className="insights-panel" id="insights"><div className="insights-heading"><h2><LocalizedText id="key_insights_ffd557"/></h2><Lightbulb size={18}/></div><div className="insight"><span>01</span><div><h3><LocalizedText id="a_warning_not_a_price_forecast_740268"/></h3><p><LocalizedText id="the_model_assesses_broad_u_s_financial_market_stress_over_the_nex_065f9f"/></p></div></div><div className="insight"><span>02</span><div><h3><LocalizedText id="two_distinct_perspectives_3ce1b8"/></h3><p><LocalizedText id="msi_measures_current_stress_the_risk_score_looks_ahead_071068"/></p></div></div><div className="insight"><span>03</span><div><h3><LocalizedText id="validation_comes_first_72f04f"/></h3><p><LocalizedText id="historical_scores_use_purged_walk_forward_out_of_sample_predictio_6de1a5"/></p></div></div><Link href="/validation"><LocalizedText id="explore_the_evidence_02a00d"/><ArrowRight size={15}/></Link></aside>
       </section>
-      <section className="bottom-grid" aria-label="Explore the project"><Link href="/validation" className="bottom-card"><span className="bottom-icon blue"><BarChart3/></span><div><h2>Model Validation</h2><p>Out-of-sample performance<br/>and historical event analysis.</p></div><ChevronRight/></Link><Link href="/methodology" className="bottom-card"><span className="bottom-icon purple"><BookOpen/></span><div><h2>Methodology</h2><p>Data, target definition<br/>and modeling approach.</p></div><ChevronRight/></Link><button className="bottom-card" onClick={() => setInsightsOpen(value => !value)} aria-expanded={insightsOpen} aria-controls="expanded-insights"><span className="bottom-icon gold"><Lightbulb/></span><div><h2>Key Insights</h2><p>Understand the current assessment<br/>and what the signals mean.</p></div><ChevronRight/></button></section>
-      {insightsOpen && <section id="expanded-insights" className="expanded-insights"><h2>Understanding the assessment</h2><p>{finite(score) ? `The latest U.S. Risk Score is ${score.toFixed(1)} / 100 (${level}).` : 'The latest U.S. Risk Score is unavailable.'} The score assesses broad stress events, not stock-price direction. SHAP channels aggregate only the leading factors returned by the API; factors within a channel can offset one another.</p><Link href="/methodology">Read the methodology <ArrowRight size={14}/></Link></section>}
-      <footer className="home-footer"><span><Globe2 size={13}/>MARKET RISK INTELLIGENCE</span><span>U.S. + Korea market stress early warning · 10 trading days · XGBoost</span></footer>
+      <section className="bottom-grid" aria-label={t("Explore the project")}><Link href="/validation" className="bottom-card"><span className="bottom-icon blue"><BarChart3/></span><div><h2><LocalizedText id="model_validation_78b3dc"/></h2><p><LocalizedText id="out_of_sample_performance_3c5a4a"/><br/><LocalizedText id="and_historical_event_analysis_a8754b"/></p></div><ChevronRight/></Link><Link href="/methodology" className="bottom-card"><span className="bottom-icon purple"><BookOpen/></span><div><h2><LocalizedText id="methodology_b509d9"/></h2><p><LocalizedText id="data_target_definition_cc2690"/><br/><LocalizedText id="and_modeling_approach_4f38db"/></p></div><ChevronRight/></Link><button className="bottom-card" onClick={() => setInsightsOpen(value => !value)} aria-expanded={insightsOpen} aria-controls="expanded-insights"><span className="bottom-icon gold"><Lightbulb/></span><div><h2><LocalizedText id="key_insights_ffd557"/></h2><p><LocalizedText id="understand_the_current_assessment_925210"/><br/><LocalizedText id="and_what_the_signals_mean_de21a0"/></p></div><ChevronRight/></button></section>
+      {insightsOpen && <section id="expanded-insights" className="expanded-insights"><h2><LocalizedText id="understanding_the_assessment_5bbbb6"/></h2><p><LocalizedText>{finite(score) ? `The latest U.S. Risk Score is ${score.toFixed(1)} / 100 (${level}).` : 'The latest U.S. Risk Score is unavailable.'}</LocalizedText><LocalizedText id="the_score_assesses_broad_stress_events_not_stock_price_direction__7a47c9" before/></p><Link href="/methodology"><LocalizedText id="read_the_methodology_83c5b8" after/><ArrowRight size={14}/></Link></section>}
+      <GlobalAssessment us={latest} korea={koreaLatest}/>
+      <ModelDisclaimer/>
+      <footer className="home-footer"><span><Globe2 size={13}/><LocalizedText id="market_risk_intelligence_b27728"/></span><span><LocalizedText id="u_s_korea_market_stress_early_warning_10_trading_days_xgboost_8e92b3"/></span></footer>
     </div>
   </div>;
 }

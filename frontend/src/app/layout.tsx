@@ -1,20 +1,28 @@
 import './globals.css';
 import React from 'react';
 import MarketHeader from './MarketHeader';
+import { cookies } from 'next/headers';
+import { I18nProvider } from './i18n/provider';
+import { languageCookie, translateText } from './i18n/messages';
 
-export const metadata = {
-  title: 'Market Risk Intelligence | AI Early Warning System',
-  description: 'AI-based U.S. and Korea financial market stress early warning dashboard',
-};
+export function generateMetadata() {
+  const language = cookies().get(languageCookie)?.value === 'ko' ? 'ko' : 'en';
+  return {
+    title: `${translateText(language, 'Market Risk Intelligence')} | ${translateText(language, 'AI EARLY WARNING SYSTEM')}`,
+    description: translateText(language, 'AI-based U.S. and Korea financial market stress early warning dashboard'),
+  };
+}
 
 export default function RootLayout({
   children,
 }: {
   children: React.ReactNode;
 }) {
+  const language = cookies().get(languageCookie)?.value === 'ko' ? 'ko' : 'en';
   return (
-    <html lang="ko" className="dark">
-      <body className="bg-dark-bg text-gray-100 min-h-screen flex flex-col font-mono antialiased">
+    <html lang={language} className="dark">
+      <body className="bg-dark-bg text-gray-100 min-h-screen flex flex-col antialiased">
+        <I18nProvider initialLanguage={language}>
         {/* Navigation Header */}
         <MarketHeader />
 
@@ -22,6 +30,7 @@ export default function RootLayout({
         <main className="flex-1 p-6 max-w-[1600px] w-full mx-auto">
           {children}
         </main>
+        </I18nProvider>
       </body>
     </html>
   );

@@ -41,3 +41,9 @@ notebooks/*.ipynb
 .DS_Store
 Thumbs.db
 .venv/
+
+# Private account/session/virtual portfolio storage
+/data/paper/
+
+# Operational snapshots, provider observations, refresh ledger
+/data/operations/

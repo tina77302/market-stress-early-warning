@@ -16,3 +16,6 @@ plotly>=5.20.0
 python-dotenv>=1.0.0
 pytest>=8.0.0
 shap>=0.46.0
+
+# Exchange sessions/holidays for operational freshness checks
+exchange-calendars>=4.13,<5

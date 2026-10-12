@@ -14,6 +14,15 @@ services:
       - ./models:/app/models
     environment:
       - FRED_API_KEY=${FRED_API_KEY:-}
+      - KRX_API_KEY=${KRX_API_KEY:-}
+      - ECOS_API_KEY=${ECOS_API_KEY:-}
+      - MARKET_REFRESH_ENABLED=${MARKET_REFRESH_ENABLED:-true}
+      - PAPER_SESSION_SECRET=${PAPER_SESSION_SECRET:-}
+      - ADMIN_EMAIL=${ADMIN_EMAIL:-}
+      - ADMIN_PASSWORD=${ADMIN_PASSWORD:-}
+      - ADMIN_BOOTSTRAP_PROMOTE_EXISTING=${ADMIN_BOOTSTRAP_PROMOTE_EXISTING:-false}
+      - PAPER_ALLOWED_ORIGINS=${PAPER_ALLOWED_ORIGINS:-http://127.0.0.1:3000,http://localhost:3000}
+      - PAPER_COOKIE_SECURE=${PAPER_COOKIE_SECURE:-false}
     command: uvicorn src.api.main:app --host 0.0.0.0 --port 8000
 
   # [15] Next.js 프론트엔드 서버
@@ -26,5 +35,6 @@ services:
       - "3000:3000"
     environment:
       - NEXT_PUBLIC_API_URL=http://api:8000
+      - API_INTERNAL_URL=http://api:8000
     depends_on:
       - api

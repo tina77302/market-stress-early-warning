@@ -1,62 +1,30 @@
 'use client';
 
-import { usePathname } from 'next/navigation';
+import { LocalizedText, useI18n, LanguageSwitcher } from './i18n/provider';
+
+
 import Link from 'next/link';
-import {
-  ShieldAlert,
-  BarChart3,
-  Activity,
-  FlaskConical,
-} from 'lucide-react';
+import { usePathname } from 'next/navigation';
+import { ShieldAlert } from 'lucide-react';
+import AccountMenu from './components/AccountMenu';
 
 export default function MarketHeader() {
-  const pathname = usePathname();
+  const { t, locale } = useI18n();
 
-  const isKorea = pathname.startsWith('/korea');
-
-  const marketName = isKorea
-    ? 'KOREA MARKET RISK INTELLIGENCE'
-    : 'U.S. MARKET RISK INTELLIGENCE';
-
-  return (
-    <header className="border-b border-dark-border bg-dark-card/80 backdrop-blur sticky top-0 z-50 px-6 py-3 flex items-center justify-between">
-      <div className="flex items-center space-x-3">
-        <ShieldAlert className="w-6 h-6 text-financial-red animate-pulse" />
-
-        <span className="font-bold text-lg tracking-wider text-white">
-          {marketName}
-        </span>
-
-        <span className="text-xs px-2 py-0.5 rounded bg-dark-border text-gray-400">
-          AI EARLY WARNING SYSTEM
-        </span>
-      </div>
-
-      <nav className="flex items-center space-x-6 text-sm font-medium">
-        <Link
-          href={isKorea ? '/korea' : '/'}
-          className="flex items-center space-x-2 text-gray-300 hover:text-white transition-colors"
-        >
-          <Activity className="w-4 h-4 text-financial-blue" />
-          <span>PAGE 01 — Market Risk</span>
-        </Link>
-
-        <Link
-          href={isKorea ? '/korea/validation' : '/validation'}
-          className="flex items-center space-x-2 text-gray-300 hover:text-white transition-colors"
-        >
-          <BarChart3 className="w-4 h-4 text-financial-green" />
-          <span>PAGE 02 — Model Validation</span>
-        </Link>
-
-        <Link
-          href={isKorea ? '/korea/methodology' : '/methodology'}
-          className="flex items-center space-x-2 text-gray-300 hover:text-white transition-colors"
-        >
-          <FlaskConical className="w-4 h-4 text-financial-amber" />
-          <span>PAGE 03 — Methodology</span>
-        </Link>
-      </nav>
-    </header>
-  );
+  const path = usePathname();
+  const korea = path.startsWith('/korea');
+  const links = [
+    { href: '/', label: 'Overview', active: path === '/' },
+    { href: '/us', label: 'U.S. Market', active: path === '/us' },
+    { href: '/korea', label: 'Korea Market', active: path === '/korea' },
+    { href: '/compare', label: 'Compare', active: path === '/compare' },
+    { href: '/paper-trading', label: 'Paper Trading', active: path === '/paper-trading' },
+    { href: korea ? '/korea/validation' : '/validation', label: 'Validation', active: path === '/validation' || path === '/korea/validation' },
+    { href: korea ? '/korea/methodology' : '/methodology', label: 'Methodology', active: path === '/methodology' || path === '/korea/methodology' },
+  ];
+  return <header className="home-nav product-nav">
+    <Link href="/" className="home-brand"><ShieldAlert size={27}/><span><LocalizedText id="market_risk_intelligence_b27728"/></span><small><LocalizedText id="ai_early_warning_system_dfd87f"/></small></Link>
+    <nav aria-label={t("Main navigation")}>{links.map(({ href, label, active }) => <Link key={label} href={href} className={active ? 'active' : ''} aria-current={active ? 'page' : undefined}><LocalizedText>{label}</LocalizedText></Link>)}</nav>
+    <div className="header-preferences"><LanguageSwitcher/><AccountMenu/></div>
+  </header>;
 }
