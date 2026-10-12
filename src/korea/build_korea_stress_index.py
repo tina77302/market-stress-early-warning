@@ -409,7 +409,7 @@ def main():
             valid_event,
             "Korea_MSI",
         ]
-        > df.loc[
+        >= df.loc[
             valid_event,
             "Stress_Threshold",
         ]
