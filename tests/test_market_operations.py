@@ -315,7 +315,7 @@ def test_api_metadata_and_health(monkeypatch):
     assert client.get('/api/admin/data-health').status_code==401
 
 
-def test_fetch_cutoff_includes_closed_session_before_publication_deadline():
+def test_exchange_close_and_publication_readiness_are_distinct():
     from src.operations.calendar import latest_closed
     now=datetime(2026,10,14,0,15,tzinfo=timezone.utc)
     assert expected('us',now)[0]=='2026-10-12'
@@ -529,3 +529,103 @@ def test_no_snapshot_unavailable():
 def test_worker_diagnostic_redacts_credentials(monkeypatch):
     monkeypatch.setenv('ECOS_API_KEY','test-secret-for-redaction')
     assert refresh_module.redact_diagnostic('API=test-secret-for-redaction')=='API=[REDACTED]'
+
+
+@pytest.mark.parametrize('market,deadline', [
+    ('korea', datetime(2026, 10, 14, 12, 30, tzinfo=timezone.utc)),
+    ('us', datetime(2026, 10, 15, 8, 0, tzinfo=timezone.utc)),
+])
+@pytest.mark.parametrize('offset_seconds', [-1, 0, 1])
+def test_refresh_provider_cutoff_respects_publication_deadline(monkeypatch, market, deadline, offset_seconds):
+    """Real KRX session enumeration/FRED request bounds follow readiness, not close."""
+    _check_refresh_boundary(monkeypatch, market, deadline, offset_seconds)
+
+
+@pytest.mark.parametrize('offset_seconds', [-1, 0])
+def test_missing_krx_new_session_only_fails_when_due(monkeypatch, offset_seconds):
+    _check_refresh_boundary(
+        monkeypatch, 'korea', datetime(2026, 10, 14, 12, 30, tzinfo=timezone.utc),
+        offset_seconds, missing_new_session=True,
+    )
+
+
+def _check_refresh_boundary(monkeypatch, market, deadline, offset_seconds, missing_new_session=False):
+    from pathlib import Path
+    from types import SimpleNamespace
+    from src.operations.calendar import calendar, latest_closed
+
+    now = deadline + timedelta(seconds=offset_seconds)
+    due = '2026-10-13' if offset_seconds < 0 else '2026-10-14'
+    assert latest_closed(market, now) == '2026-10-14'
+    assert expected(market, now)[0] == due
+    monkeypatch.setattr(refresh_module, 'expected', lambda m: expected(m, now))
+    dates = calendar(market, now.year).sessions_in_range('2024-01-02', '2026-10-13')[-500:]
+    dates = dates.tz_localize(None) if dates.tz is not None else dates
+    bases = {name: pd.DataFrame({name: np.arange(500, dtype=float) + 10}, index=dates)
+             for name in refresh_module.SERIES[market]}
+    monkeypatch.setattr(refresh_module, 'seeds', lambda _: bases)
+    old = {**payload('2026-10-13'), 'input_series': [
+        {'series': n, 'latest_observation_date': '2026-10-13', 'retrieved_at': store.utcnow()}
+        for n in bases
+    ]}
+    sid = store.publish(job(market), market, old)
+    requested = []
+    monkeypatch.setenv('KRX_API_KEY', 'fixture-boundary-key')
+
+    def observations(name, end):
+        result = bases[name].copy()
+        if end == '2026-10-14':
+            result.loc[pd.Timestamp(end), name] = 510.
+        return result
+
+    class BoundaryProviders(Providers):
+        def __init__(self, jid):
+            super().__init__(jid, sleep=lambda _: None)
+
+        def http(self, url, **kwargs):
+            if 'krx.co.kr' in url:
+                date = kwargs['params']['basDd']
+                name = 'KOSPI200' if 'kospi_dd_trd' in url else 'VKOSPI'
+                requested.append((name, pd.Timestamp(date).strftime('%Y-%m-%d')))
+                rows = [] if missing_new_session and date == '20261014' else [{
+                    'IDX_NM': '코스피 200' if name == 'KOSPI200' else '코스피 200 변동성지수',
+                    'BAS_DD': date, 'CLSPRC_IDX': '510',
+                }]
+                return SimpleNamespace(json=lambda: {'OutBlock_1': rows})
+            params = kwargs['params']
+            name, end = params['id'], params['coed']
+            requested.append((name, end))
+            data = observations(name, end)
+            # Use the real FRED parser and validation, without network requests.
+            return SimpleNamespace(text=data.rename_axis('observation_date').to_csv())
+
+        def yahoo(self, name, end):
+            requested.append((name, end))
+            return observations(name, end), store.utcnow()
+
+        def ecos(self, name, end):
+            requested.append((name, end))
+            return observations(name, end), store.utcnow()
+
+    def worker(args, **kwargs):
+        stage = Path(args[-1])
+        spec = json.loads((stage / 'inputs.json').read_text())
+        result = {**payload(spec['common_date']), 'input_series': spec['series'],
+                  'artifact_directory': str(stage), 'anomalies': [], 'model_inference_at': store.utcnow()}
+        (stage / 'snapshot.json').write_text(json.dumps(result))
+        return SimpleNamespace(returncode=0)
+
+    monkeypatch.setattr(refresh_module.subprocess, 'run', worker)
+    report = refresh_module.refresh(market, providers_factory=BoundaryProviders)
+    assert report['expected_date'] == report['fetch_through_date'] == due
+    assert set(name for name, _ in requested) == set(bases)
+    assert max(date for _, date in requested) == due
+    if missing_new_session and offset_seconds >= 0:
+        assert report['status'] == 'ERROR' and not report['snapshot_published']
+        assert {s['series'] for s in report['series'] if s['status'] == 'ERROR'} == {'KOSPI200', 'VKOSPI'}
+        assert store.snapshot(market)['snapshot_id'] == sid
+    else:
+        assert report['status'] == 'SUCCESS' and report['snapshot_published']
+        assert report['common_feature_date'] == due
+        assert all(s['status'] == 'CURRENT' for s in report['series'])
+        assert store.snapshot(market)['observation_date'] == due

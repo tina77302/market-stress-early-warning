@@ -11,7 +11,7 @@ from pathlib import Path
 import pandas as pd
 from src.config import PROJECT_ROOT, DATA_RAW_DIR
 from . import alerts
-from .calendar import expected, latest_closed, calendar, series_expected
+from .calendar import expected, calendar, series_expected
 from .providers import Providers, PROVIDERS, UNITS
 from .store import database, root, utcnow, snapshot, publish, history, artifact_path
 from .validation import ValidationFailure, validate_series
@@ -125,7 +125,10 @@ def refresh(market, trigger='manual', adopt_local=False, providers_factory=Provi
         try:
             if not date:
                 raise ValidationFailure('Cannot prove expected exchange session; calendar unavailable.')
-            fetch_end=latest_closed(market)
+            # Provider adapters require sessions through this cutoff. A close
+            # alone does not make end-of-day inputs due: use the same market
+            # publication deadline as freshness/scheduling, sampled above.
+            fetch_end=date
             report['fetch_through_date']=fetch_end
             base=seeds(market)
             frames={}
