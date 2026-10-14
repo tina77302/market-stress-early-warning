@@ -1,4 +1,5 @@
 """Shared validated snapshots for every user; no subscription inputs."""
+import math
 from datetime import datetime, timezone, timedelta
 from .calendar import expected, series_expected
 from .store import snapshot, history, database
@@ -42,13 +43,16 @@ def health(market, now=None, *, current=None):
             status='DELAYED'
     report=job.get('report') if job else None
     attempted=(report or {}).get('series') or (report or {}).get('input_series') or []
-    return {'market':market,'status':status,'is_current':status=='CURRENT',
+    model_available = bool(current and isinstance(payload.get('risk_score_10d'), (int, float)) and
+                           math.isfinite(payload['risk_score_10d']) and 0 <= payload['risk_score_10d'] <= 100 and
+                           isinstance(payload.get('market_stress_index'), (int, float)) and math.isfinite(payload['market_stress_index']))
+    return {'market':market,'status':status,'is_current':status=='CURRENT','model_available':model_available,
             'last_known_good_date':current['observation_date'] if current else None,
             'published_at':current['published_at'] if current else None,
             'snapshot_id':current['snapshot_id'] if current else None,
             'expected_observation_date':date,'input_series':series,'latest_attempt_series':attempted,
-            'last_job':{k:job[k] for k in ['job_id','started_at','finished_at','status','error_type','error_message','snapshot_published']} if job else None,
-            'scheduler':scheduler,'message':'Validated current market snapshot.' if status=='CURRENT' else 'Current market risk unavailable. Showing the last known good observation.' if current else 'Current market risk unavailable. No validated snapshot.'}
+            'last_job':{k:job[k] for k in ['job_id','started_at','finished_at','status','error_type','snapshot_published']} if job else None,
+            'scheduler':scheduler,'message':'Validated current market snapshot.' if status=='CURRENT' else 'Some indicators are awaiting updates. Showing the last validated observation.' if status=='DELAYED' and model_available else 'Showing the last validated observation; check data freshness.' if model_available else 'Current market risk unavailable. No validated snapshot.'}
 
 
 def current_payload(market):

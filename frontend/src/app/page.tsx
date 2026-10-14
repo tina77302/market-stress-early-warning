@@ -1,4 +1,5 @@
 'use client';
+import { modelAvailable, signal } from './components/market-data';
 
 import { LocalizedText, useI18n } from './i18n/provider';
 
@@ -133,12 +134,12 @@ export default function MarketRiskPage() {
     void load();
     return () => controller.abort();
   }, [refresh]);
-  const score = latest?.data_health?.is_current ? latest.risk_score_10d : null;
+  const score = modelAvailable(latest) ? latest!.risk_score_10d : null;
   const level = !finite(score) ? '--' : score >= 70 ? 'HIGH' : score >= 50 ? 'ELEVATED' : score >= 30 ? 'WATCH' : 'LOW';
   const tone = level === 'LOW' ? 'green' : level === 'WATCH' ? 'amber' : level === '--' ? 'muted' : 'red';
 
-  const koreaScore = koreaLatest?.data_health?.is_current ? koreaLatest.risk_score_10d : null;
-  const koreaWarning = koreaLatest?.warning_active === true;
+  const koreaScore = modelAvailable(koreaLatest) ? koreaLatest!.risk_score_10d : null;
+  const koreaWarning = signal('korea', koreaLatest) === 'WARNING';
   const koreaTone = !finite(koreaScore) ? 'muted' : koreaWarning ? 'red' : 'green';
   const koreaStatus = !finite(koreaScore)
     ? 'UNAVAILABLE'
@@ -167,11 +168,11 @@ export default function MarketRiskPage() {
       <section className="home-hero">
         <div className="hero-copy"><div className="eyebrow"><LocalizedText id="global_markets_forward_looking_intelligence_7a56d1"/></div><h1><LocalizedText id="market_stress_c09ca4"/><br/><span><LocalizedText id="an_earlier_warning_18baf8"/></span></h1><h2><LocalizedText id="market_stress_early_warning_72b129"/></h2><p><LocalizedText id="will_broad_financial_market_stress_emerge_within_the_next_10_trad_4cf995"/></p><Link href="/methodology" className="blue-button"><BookOpen size={15}/><LocalizedText id="how_it_works_1dd6a1"/><ArrowRight size={15}/></Link></div>
         <MarketGlobe/>
-        <aside className="hero-snapshot"><div className="observation"><Clock3 size={15}/><span><LocalizedText id="u_s_last_market_observation_9a6f66"/><strong><LocalizedText>{latest?.last_updated || '--'}</LocalizedText></strong></span><span className={`data-status ${!latest?.data_health?.is_current ? 'offline' : ''}`}><i/><LocalizedText id={!loading && latest?.data_health?.status==='ERROR'?'error_data_health':undefined}>{loading ? 'Loading' : latest?.data_health?.is_current ? 'API connected' : latest?.data_health?.status || 'Unavailable'}</LocalizedText></span></div><div className="snapshot-panel"><div className="eyebrow"><LocalizedText id="key_indicators_u_s_market_431446"/></div><div className="snapshot-metrics">{metrics.map(metric => <div key={metric.label}><span><LocalizedText>{metric.label}</LocalizedText></span><strong><LocalizedText>{metric.value}</LocalizedText></strong><Sparkline data={history.slice(-40)} field={metric.field}/></div>)}</div><small><LocalizedText id="latest_observation_sparklines_show_last_40_oos_observations_8d9027"/></small></div></aside>
+        <aside className="hero-snapshot"><div className="observation"><Clock3 size={15}/><span><LocalizedText id="u_s_last_market_observation_9a6f66"/><strong><LocalizedText>{latest?.last_updated || '--'}</LocalizedText></strong></span><span className={`data-status ${!modelAvailable(latest) ? 'offline' : ''}`}><i/><LocalizedText id={!loading && latest?.data_health?.status==='ERROR'?'error_data_health':undefined}>{loading ? 'Loading' : latest?.data_health?.is_current ? 'API connected' : latest?.data_health?.status || 'Unavailable'}</LocalizedText></span></div><div className="snapshot-panel"><div className="eyebrow"><LocalizedText id="key_indicators_u_s_market_431446"/></div><div className="snapshot-metrics">{metrics.map(metric => <div key={metric.label}><span><LocalizedText>{metric.label}</LocalizedText></span><strong><LocalizedText>{metric.value}</LocalizedText></strong><Sparkline data={history.slice(-40)} field={metric.field}/></div>)}</div><small><LocalizedText id="latest_observation_sparklines_show_last_40_oos_observations_8d9027"/></small></div></aside>
       </section>
       {errors.length > 0 && <div className="api-notice" role="status"><LocalizedText>{errors.join(', ')}</LocalizedText><LocalizedText id="unavailable_9cd983" before after/><button onClick={() => setRefresh(value => value + 1)} disabled={loading}><LocalizedText>{loading ? 'Retrying…' : 'Retry connection'}</LocalizedText></button></div>}
       <section className="market-grid" aria-label={t("Market overview")}>
-        <article className={`market-card us-card tone-${tone}`}><div className="city-image us-image"/><div className="market-card-content"><div className="card-heading"><h2><span className="flag">🇺🇸</span><LocalizedText id="u_s_market_9b3642" before/><ChevronRight size={18}/></h2><span className={`risk-badge ${tone}`}><LocalizedText>{level === '--' ? 'UNAVAILABLE' : `${level} RISK`}</LocalizedText></span></div><div className="us-card-body"><div className="score-block"><span className="score-label"><LocalizedText id="10_day_risk_score_f5fce8"/></span><div className={`risk-number ${tone}`}><LocalizedText>{format(score, 1)}</LocalizedText><small>/ 100</small></div><p><LocalizedText id="forward_looking_market_06aca8"/><br/><LocalizedText id="stress_warning_3eea66"/></p><div className="current-msi"><LocalizedText id="current_stress_msi_2ac8c2" after/><strong><LocalizedText>{format(latest?.market_stress_index, 2)}</LocalizedText></strong></div></div><div className="us-metrics"><div className="eyebrow"><LocalizedText id="market_snapshot_745f02"/></div>{metrics.map(metric => <div key={metric.label}><span><LocalizedText>{metric.label === 'Baa–Treasury' ? 'Credit Spread' : metric.label}</LocalizedText></span><strong><LocalizedText>{metric.value}</LocalizedText></strong></div>)}<Link href="/us" className="market-button"><LocalizedText id="explore_u_s_market_70ffd9"/><ArrowRight size={17}/></Link></div></div><div className="score-footnote"><LocalizedText id="low_30_d9463e" after/><span><LocalizedText id="watch_30_50_23abd9"/></span><span><LocalizedText id="elevated_50_70_ee49cd"/></span><span><LocalizedText id="high_70_b19f6d"/></span></div></div></article>
+        <article className={`market-card us-card tone-${tone}`}><div className="city-image us-image"/><div className="market-card-content"><div className="card-heading"><h2><span className="flag">🇺🇸</span><LocalizedText id="u_s_market_9b3642" before/><ChevronRight size={18}/></h2><span className={`risk-badge ${tone}`}><LocalizedText>{level === '--' ? 'UNAVAILABLE' : `${level} RISK`}</LocalizedText></span></div><div className="us-card-body"><div className="score-block"><span className="score-label"><LocalizedText id="10_day_risk_score_f5fce8"/></span><div className={`risk-number ${tone}`}><LocalizedText>{format(score, 1)}</LocalizedText><small>/ 100</small></div><p><LocalizedText id="forward_looking_market_06aca8"/><br/><LocalizedText id="stress_warning_3eea66"/></p><div className="current-msi"><LocalizedText id="current_stress_msi_2ac8c2" after/><strong><LocalizedText>{format(modelAvailable(latest) ? latest?.market_stress_index : null, 3)}</LocalizedText></strong></div></div><div className="us-metrics"><div className="eyebrow"><LocalizedText id="market_snapshot_745f02"/></div>{metrics.map(metric => <div key={metric.label}><span><LocalizedText>{metric.label === 'Baa–Treasury' ? 'Credit Spread' : metric.label}</LocalizedText></span><strong><LocalizedText>{metric.value}</LocalizedText></strong></div>)}<Link href="/us" className="market-button"><LocalizedText id="explore_u_s_market_70ffd9"/><ArrowRight size={17}/></Link></div></div><div className="score-footnote"><LocalizedText id="low_30_d9463e" after/><span><LocalizedText id="watch_30_50_23abd9"/></span><span><LocalizedText id="elevated_50_70_ee49cd"/></span><span><LocalizedText id="high_70_b19f6d"/></span></div></div></article>
         <article className={`market-card korea-card tone-${koreaTone}`} id="korea">
           <div className="city-image korea-image"/>
           <div className="market-card-content">
@@ -192,7 +193,7 @@ export default function MarketRiskPage() {
               </div>
               <p><LocalizedText id="forward_looking_korean_5264a6" before/><br/><LocalizedText id="market_stress_warning_47172f" before after/></p>
               <div className="current-msi"><LocalizedText id="current_stress_msi_2ac8c2" before/><LocalizedText>{' '}</LocalizedText>
-                <strong><LocalizedText>{format(koreaLatest?.market_stress_index, 3)}</LocalizedText></strong>
+                <strong><LocalizedText>{format(modelAvailable(koreaLatest) ? koreaLatest?.market_stress_index : null, 3)}</LocalizedText></strong>
               </div>
             </div>
 

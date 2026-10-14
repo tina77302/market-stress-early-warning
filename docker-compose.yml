@@ -4,6 +4,7 @@ services:
     build:
       context: .
       dockerfile: Dockerfile.api
+      target: runtime
     container_name: market-stress-api
     restart: unless-stopped
     ports:

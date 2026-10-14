@@ -128,8 +128,54 @@ for(const language of ['ko','en']) {
 assert.equal(JSON.stringify(validationFixture),fixtureBefore,'Rendering changed validation data');
 const CrossSnapshot=require('../src/app/components/CrossMarketSnapshot.tsx').default;
 const usFixture={last_updated:'2026-10-09',risk_score_10d:11.9,market_stress_index:-1.159,data_health:{status:'ERROR',is_current:false,input_series:[]}};
-const koreaFixture={last_updated:'2026-10-13',risk_score_10d:37.8,market_stress_index:0.744,data_health:{status:'CURRENT',is_current:true,input_series:[]}};
+const koreaFixture={is_stress_event:false,warning_active:false,stress_threshold:1.116,last_updated:'2026-10-13',risk_score_10d:37.8,market_stress_index:0.744,data_health:{status:'CURRENT',is_current:true,input_series:[]}};
 const crossKorean=render('ko',CrossSnapshot,{us:usFixture,korea:koreaFixture});
 for(const label of ['데이터 업데이트 오류','최신 데이터 반영','11.9','37.8','2026년 10월 9일','2026년 10월 13일'])assert.ok(crossKorean.includes(label),label);
 assert.ok(render('en',CrossSnapshot,{us:usFixture,korea:koreaFixture}).includes('ERROR'));
 console.log('Populated validation/comparison rendering preserves all fixture values and independent market dates.');
+
+// Freshness is independent of committed model availability, on every market page.
+const marketData=require('../src/app/components/market-data.ts');
+for(const status of ['CURRENT','DELAYED','STALE','PARTIAL','ERROR']) {
+ const delayed={...usFixture,data_health:{status,is_current:status==='CURRENT',model_available:true,input_series:[]}};
+ assert.equal(marketData.modelAvailable(delayed),true,status);
+ assert.equal(marketData.signal('us',delayed),'LOW',status);
+ assert.equal(marketData.signal('korea',{...delayed,risk_score_10d:65,warning_active:false}),'BELOW WARNING');
+ for(const language of ['en','ko']) {
+  const notice=render(language,Notice,{market:'us',latest:delayed});
+  assert.ok(!notice.includes(language==='en'?'Current market risk unavailable':'현재 시장 위험 데이터를'));
+  const markup=render(language,CrossSnapshot,{us:delayed,korea:koreaFixture});
+  assert.ok(markup.includes('11.9 / 100') && markup.includes('-1.159'));
+  assert.ok(!markup.includes('UNAVAILABLE'));
+ }
+}
+for(const value of [null,{...usFixture,risk_score_10d:NaN},{...usFixture,data_health:{model_available:false}},{...usFixture,risk_score_10d:101}])assert.equal(marketData.signal('us',value),'UNAVAILABLE');
+const delayedFixture={...usFixture,spy_price:778.57,vix_level:14.84,baa_treasury_spread:1.45,data_health:{status:'DELAYED',is_current:false,model_available:true,input_series:[]}};
+const originalUseMarket=marketData.useMarket;
+marketData.useMarket=market=>({latest:market==='us'?delayedFixture:koreaFixture,history:[],shap:null,loading:false,errors:[],retry:()=>{}});
+try {
+ for(const file of ['../src/app/us/page.tsx','../src/app/korea/page.tsx','../src/app/compare/page.tsx'])for(const language of ['en','ko']) {
+  const markup=render(language,require(file).default);
+  assert.ok(markup.includes(file.includes('/korea/')?'37.8':'11.9'));
+  assert.ok(!markup.includes('UNAVAILABLE'));
+ }
+} finally {marketData.useMarket=originalUseMarket;}
+// Inject Overview's existing state while allowing child components' own hooks.
+const Overview=require('../src/app/page.tsx').default;
+const useStateBefore=React.useState;
+for(const language of ['en','ko']) {
+ const states=[delayedFixture,koreaFixture,[],null,false,[],'3Y',false,0];let index=0;
+ React.useState=initial=>{
+  // I18nProvider's state must remain the real locale.
+  if(initial==='en'||initial==='ko')return useStateBefore(initial);
+  return index<states.length?[states[index++],()=>{}]:useStateBefore(initial);
+ };
+ try {
+  const markup=render(language,Overview);
+  const usCard=markup.match(/<article class="market-card us-card[\s\S]*?<\/article>/)[0];
+  assert.ok(usCard.includes('11.9') && usCard.includes('-1.159'));
+  assert.ok(!markup.includes('UNAVAILABLE'));
+  assert.ok(markup.includes(language==='ko'?'일부 지표 업데이트 대기':'Some indicators are awaiting updates.'));
+ } finally {React.useState=useStateBefore;}
+}
+console.log('Freshness/availability: all five freshness states retain valid scores; missing/invalid models unavailable; Overview/U.S./Korea/Compare bilingual rendering passed.');

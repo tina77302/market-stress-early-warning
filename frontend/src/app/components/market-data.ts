@@ -3,7 +3,7 @@
 import { useEffect, useState } from 'react';
 export type Market = 'us' | 'korea';
 export interface InputHealth { series: string; provider: string; status: string; latest_observation_date: string | null; retrieved_at: string | null; attempt_count: number }
-export interface DataHealth { status: string; is_current: boolean; expected_observation_date: string | null; input_series: InputHealth[]; last_job?: {status: string; error_message?: string | null} | null }
+export interface DataHealth { status: string; is_current: boolean; model_available?: boolean; expected_observation_date: string | null; input_series: InputHealth[]; last_job?: {status: string; error_message?: string | null} | null }
 export interface Latest {
   data_health?: DataHealth;
   last_updated?: string;
@@ -28,9 +28,14 @@ export interface Driver { feature: string; feature_value?: number | null; shap_v
 export interface Shap { date?: string; model?: string; feature_count?: number; top_drivers: Driver[] }
 export const finite = (value: unknown): value is number => typeof value === 'number' && Number.isFinite(value);
 export const fmt = (value: unknown, digits = 2, suffix = '') => finite(value) ? `${value.toFixed(digits)}${suffix}` : '—';
+export function modelAvailable(latest: Latest | null | undefined) {
+  return latest?.data_health?.model_available !== false && !!latest?.last_updated &&
+    finite(latest.risk_score_10d) && latest.risk_score_10d >= 0 && latest.risk_score_10d <= 100 &&
+    finite(latest.market_stress_index);
+}
 export function signal(market: Market, latest: Latest | null) {
   const score = latest?.risk_score_10d;
-  if (!latest?.data_health?.is_current || !finite(score)) return 'UNAVAILABLE';
+  if (!modelAvailable(latest) || !finite(score)) return 'UNAVAILABLE';
   if (market === 'korea') return (typeof latest?.warning_active === 'boolean' ? latest.warning_active : score >= 50) ? 'WARNING' : 'BELOW WARNING';
   return score >= 70 ? 'HIGH' : score >= 50 ? 'ELEVATED' : score >= 30 ? 'WATCH' : 'LOW';
 }

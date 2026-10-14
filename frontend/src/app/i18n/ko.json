@@ -810,5 +810,9 @@
   "feature_display_vkospi_252d_zscore": "VKOSPI 252거래일 Z-Score",
   "shap_top_1_contributions": "주요 기여 요인: {v0} ({v1})",
   "shap_top_2_contributions": "주요 기여 요인: {v0} ({v1}) · {v2} ({v3})",
-  "shap_top_3_contributions": "주요 기여 요인: {v0} ({v1}) · {v2} ({v3}) · {v4} ({v5})"
+  "shap_top_3_contributions": "주요 기여 요인: {v0} ({v1}) · {v2} ({v3}) · {v4} ({v5})",
+  "freshness_delayed_notice": "일부 지표 업데이트 대기",
+  "freshness_stale_notice": "마지막 검증 데이터를 표시합니다. 기준일을 확인해 주세요.",
+  "freshness_error_notice": "데이터 갱신에 실패해 마지막 검증 데이터를 표시합니다.",
+  "freshness_partial_notice": "일부 지표를 확인하고 있습니다. 마지막 검증 데이터를 표시합니다."
 }

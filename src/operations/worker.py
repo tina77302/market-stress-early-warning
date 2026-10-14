@@ -54,10 +54,9 @@ def build(market, directory):
             module.CREDIT_PATH = str(stage/'ecos_credit.csv')
         features_module.OUTPUT_PATH = str(stage/'korea_feature_matrix.csv')
         features_module.LATEST_OUTPUT_PATH = str(stage/'korea_latest_features.csv')
-        features_module.TARGET_PATH = str(api.KOREA_PROCESSED_DIR/'korea_targets.csv')
         msi_module.OUTPUT_PATH = str(stage/'korea_stress_index.csv')
         msi_module.main()
-        features_module.main()
+        features_module.main(inference_only=True)
         features = pd.read_csv(stage/'korea_latest_features.csv',index_col='Date',parse_dates=True)
         msi = pd.read_csv(stage/'korea_stress_index.csv',index_col='Date',parse_dates=True)
         columns = api.KOREA_FEATURE_COLS

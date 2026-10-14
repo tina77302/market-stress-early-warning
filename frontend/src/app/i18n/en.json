@@ -810,5 +810,9 @@
   "feature_display_vkospi_252d_zscore": "VKOSPI 252D ZScore",
   "shap_top_1_contributions": "Largest available contributions: {v0} ({v1}).",
   "shap_top_2_contributions": "Largest available contributions: {v0} ({v1}); {v2} ({v3}).",
-  "shap_top_3_contributions": "Largest available contributions: {v0} ({v1}); {v2} ({v3}); {v4} ({v5})."
+  "shap_top_3_contributions": "Largest available contributions: {v0} ({v1}); {v2} ({v3}); {v4} ({v5}).",
+  "freshness_delayed_notice": "Some indicators are awaiting updates.",
+  "freshness_stale_notice": "Showing the last validated snapshot. Check the observation date.",
+  "freshness_error_notice": "The latest refresh failed. Showing the last validated snapshot.",
+  "freshness_partial_notice": "Some inputs need attention. Showing the last validated snapshot."
 }

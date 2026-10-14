@@ -332,7 +332,7 @@ def build_features(df):
     return df
 
 
-def main():
+def main(*, inference_only=False):
 
     print("=" * 72)
     print("KOREA MARKET FEATURE ENGINEERING")
@@ -442,6 +442,12 @@ def main():
         index=False,
         encoding="utf-8-sig",
     )
+
+    # Operational inference needs only observable features, not cached research
+    # labels. The worker still validates all features, MSI and frozen inference.
+    # Default research execution retains its target join and all existing QA.
+    if inference_only:
+        return
 
     # --------------------------------------------------------
     # 5. Load targets

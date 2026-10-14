@@ -436,3 +436,96 @@ def test_malformed_fred_schema_is_permanent(monkeypatch):
     monkeypatch.setattr(provider,'http',lambda *a,**kw:SimpleNamespace(text='unexpected,column\n1,2\n'))
     with pytest.raises(ValidationFailure):provider.fred('DBAA','2026-10-12')
     assert len(store.history()[0]['attempts'])==1
+
+
+def test_worker_failure_records_stderr_even_without_calculation_log(monkeypatch, caplog):
+    """Import/startup errors and uncaught tracebacks must not become normal-output errors."""
+    from types import SimpleNamespace
+    monkeypatch.setattr(refresh_module, 'expected', lambda _: ('2026-10-09', '2026-10-12T00:00:00+00:00'))
+    monkeypatch.setattr(refresh_module, 'seeds', lambda _: {})
+    dates = pd.bdate_range(end='2026-10-09', periods=500)
+    class CachedProviders:
+        def __init__(self, _): self.counts = {}
+        def yahoo(self, name, *args):
+            self.counts[name] = 1
+            return pd.DataFrame({name: np.arange(500, dtype=float) + 10}, index=dates), store.utcnow()
+        fred = yahoo
+    monkeypatch.setenv('ECOS_API_KEY', 'worker-test-private-key')
+    traceback = 'Traceback (most recent call last):\nFileNotFoundError: required artifact absent worker-test-private-key\n'
+    monkeypatch.setattr(refresh_module.subprocess, 'run', lambda *a, **k: SimpleNamespace(returncode=1, stdout='Normal progress only', stderr=traceback))
+    result = refresh_module.refresh('us', providers_factory=CachedProviders)
+    stage = store.root() / 'staging' / result['job_id']
+    assert result['status'] == 'ERROR' and not result['snapshot_published']
+    assert 'exit_code=1' in result['error_message'] and 'FileNotFoundError' not in result['error_message']
+    assert (stage / 'worker.stderr.log').read_text() == traceback.replace('worker-test-private-key', '[REDACTED]')
+    assert 'worker-test-private-key' not in caplog.text
+    assert 'FileNotFoundError' in (stage / 'worker.diagnostic.log').read_text()
+    assert 'CALCULATION' in (stage / 'worker.diagnostic.log').read_text()
+    assert (stage / 'worker.stdout.log').read_text() == 'Normal progress only'
+    assert 'FileNotFoundError' in caplog.text
+    assert store.history()[0]['error_message'] == result['error_message']
+
+
+@pytest.mark.parametrize('failure', [False, True])
+def test_real_korea_worker_without_research_targets(tmp_path, failure):
+    """Missing research labels cannot block inference; actual model errors still fail."""
+    import subprocess, sys
+    script = '''
+import hashlib,json,os,sys
+from pathlib import Path
+from src.operations import refresh,store
+from src.config import MODELS_DIR
+stage=store.root()/'staging'/'korea-test';stage.mkdir(parents=True)
+frames=refresh.legacy('korea')
+refresh.stage_inputs('korea',stage,frames,[],'legacy-cache','2026-10-14')
+# No processed research target directory exists in this isolated runtime root.
+os.environ['MARKET_DATA_ROOT']=str(stage.parent/'missing-research-cache')
+from src.api import main as api
+api.KOREA_PROCESSED_DIR=Path(os.environ['MARKET_DATA_ROOT'])/'processed/korea'
+assert not (api.KOREA_PROCESSED_DIR/'korea_targets.csv').exists()
+if sys.argv[1]=='True':
+    import joblib
+    class BrokenModel:
+        def predict_proba(self,*args,**kwargs): raise RuntimeError('injected Korea inference failure')
+    joblib.load=lambda *args,**kwargs: BrokenModel()
+from src.operations.worker import build
+build('korea',stage)
+value=json.loads((stage/'snapshot.json').read_text())
+assert value['feature_count']==17
+assert value['artifact_directory']=='staging/korea-test'
+assert value['model_sha256']==hashlib.sha256((api.KOREA_MODEL_DIR/'xgboost_10d_latest.joblib').read_bytes()).hexdigest()
+'''
+    result = subprocess.run([sys.executable, '-c', script, str(failure)], capture_output=True, text=True, timeout=180)
+    if failure:
+        assert result.returncode != 0
+        assert 'injected Korea inference failure' in result.stderr
+        assert not (store.root() / 'staging/korea-test/snapshot.json').exists()
+    else:
+        assert result.returncode == 0, result.stderr[-2000:]
+
+
+def test_delayed_snapshot_available_and_public_health_has_no_traceback(monkeypatch):
+    monkeypatch.setattr(service, 'expected', lambda *args: ('2026-10-12', '2026-10-13T08:00:00+00:00'))
+    jid=job(); value=payload('2026-10-09');value.update(risk_score_10d=11.9,market_stress_index=-1.159)
+    store.publish(jid,'us',value)
+    with store.database() as db:
+        db.execute('UPDATE jobs SET expected_date=? WHERE job_id=?',('2026-10-12',jid))
+    current=service.current_payload('us')
+    assert current['data_health']['status']=='DELAYED'
+    assert current['data_health']['model_available'] and not current['data_health']['is_current']
+    assert current['risk_score_10d']==11.9 and current['market_stress_index']==-1.159
+    assert 'unavailable' not in current['data_health']['message'].lower()
+    with store.database() as db:
+        db.execute("UPDATE jobs SET status='ERROR',error_message='Traceback: /internal/path' WHERE job_id=?",(jid,))
+    health=service.health('us')
+    assert health['status']=='ERROR' and health['model_available']
+    assert 'Traceback' not in json.dumps(health) and '/internal/path' not in json.dumps(health)
+
+
+def test_no_snapshot_unavailable():
+    assert not service.health('korea')['model_available']
+
+
+def test_worker_diagnostic_redacts_credentials(monkeypatch):
+    monkeypatch.setenv('ECOS_API_KEY','test-secret-for-redaction')
+    assert refresh_module.redact_diagnostic('API=test-secret-for-redaction')=='API=[REDACTED]'

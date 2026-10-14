@@ -1,6 +1,6 @@
 # EC2 private staging procedure
 
-Prepared 2026-10-14 against the blockers in [the readiness audit](aws-staging-readiness.md). **Do not deploy until the Docker build/start/recreation gate below passes.** This task did not provision AWS resources, configure a domain, commit, or push. The implementation uses one host and SQLite; it does not change financial calculations or research artifacts.
+Prepared 2026-10-14 against the blockers in [the readiness audit](aws-staging-readiness.md). **Do not deploy until the Docker build/start/recreation gate below passes.** The staging preparation did not provision AWS resources or configure a domain. Reviewed source is delivered on `wip/data-automation`; use [the release procedure](aws-staging-release.md) for an existing AWS host. The implementation uses one host and SQLite; it does not change financial calculations or research artifacts.
 
 ## Resources and directories
 
@@ -22,40 +22,30 @@ Identify the data device using `lsblk -f`. Format **only a confirmed new empty E
 
 ## Deliver the reviewed source and existing artifacts
 
-The working tree is intentionally uncommitted. A clone of checkpoint `21b1852` alone does not contain this implementation or the preceding automation/localization work. Deliver a reviewed source patch plus the explicitly listed new source files; do not copy `.env`, local databases, `node_modules`, `.next`, experiments added locally, or the README backup as a release.
+Use the reviewed `wip/data-automation` source release from the existing Git repository. Git contains application source, deployment scripts and tests, not private environment files or the generated artifact archive. Source delivery does not replace the separately controlled persistent/deployment artifacts.
 
-On the current source machine, after review:
+On the source machine, export the existing approved artifacts to a new destination:
 
 ```bash
-git diff --binary HEAD -- .gitignore docker-compose.yml frontend src tests ":!frontend/tsconfig.tsbuildinfo" > /tmp/market-stress-release.patch
-tar --exclude='__pycache__' --exclude='*.pyc' --exclude='deploy/private' \
-  -czf /tmp/market-stress-release-new-files.tar.gz \
-  .dockerignore Dockerfile.api deploy/docker-compose.staging.yml deploy/Caddyfile \
-  deploy/staging.env.example deploy/market-stress.service deploy/docker-ebs.conf \
-  frontend/.dockerignore frontend/Dockerfile \
-  frontend/next.config.mjs frontend/src/app/api/health requirements-staging.in \
-  requirements-staging.lock scripts/staging_state.py src/runtime.py \
-  tests/test_staging_readiness.py docs/aws-staging-readiness.md \
-  docs/aws-ec2-staging.md docs/aws-staging-verification.md
 python3 scripts/staging_state.py artifacts --data-root data --models-root models \
   --bundle /tmp/market-stress-artifacts
 ```
 
-Transfer the patch, new-source archive and artifact directory through an authenticated private channel. The artifact export is an allowlist of existing CSV/JSON files under `raw`, `processed`, `features`, plus the two frozen model files and SHA256 manifest. It excludes environment files, accounts, sessions, operations DBs and logs. It does **not** retrain or regenerate research. Keep the reviewed manifest with the release; hash checks detect transfer corruption, not a maliciously replaced manifest.
+Transfer the artifact directory through an authenticated private channel. The artifact export is an allowlist of existing CSV/JSON files under `raw`, `processed`, `features`, plus the two frozen model files and SHA256 manifest. It excludes environment files, accounts, sessions, operations DBs and logs. It does **not** retrain or regenerate research. Keep the reviewed manifest with the release; hash checks detect transfer corruption, not a maliciously replaced manifest.
 
-Required Korea refresh inputs are `raw/korea/krx_indices.csv`, `vkospi.csv`, `ecos_credit.csv`, and **`processed/korea/korea_targets.csv`** (the existing feature builder reads it). U.S. bootstrap requires `raw/raw_market_data.csv`. Public research routes additionally need existing U.S. OOS/multi-horizon/SHAP and Korea OOS/evaluation/SHAP outputs. `scripts/staging_state.py:REQUIRED` checks these exact files, including `oos_predictions_10d.csv`. The bundle carries remaining existing CSV/JSON research/cache artifacts unchanged. No research-generation command is part of deployment.
+Required Korea refresh inputs are `raw/korea/krx_indices.csv`, `vkospi.csv`, and `ecos_credit.csv`. `processed/korea/korea_targets.csv` is the approved static research artifact for the default labeled feature builder. Operational inference no longer needs its future labels; staging now independently guarantees this release artifact exists through the image-backed initialization below. U.S. bootstrap requires `raw/raw_market_data.csv`. Public research routes additionally need existing U.S. OOS/multi-horizon/SHAP and Korea OOS/evaluation/SHAP outputs. `scripts/staging_state.py:REQUIRED` checks these exact files, including `oos_predictions_10d.csv`. The bundle carries remaining existing CSV/JSON research/cache artifacts unchanged. No research-generation command is part of deployment.
 
 On the staging host, with `REPOSITORY_URL` identifying the existing repository:
 
 ```bash
 sudo install -d -o "$(id -u)" -g "$(id -g)" /opt/market-stress-early-warning
-git clone "$REPOSITORY_URL" /opt/market-stress-early-warning
+git clone --branch wip/data-automation "$REPOSITORY_URL" /opt/market-stress-early-warning
 cd /opt/market-stress-early-warning
-git checkout 21b1852
-git apply --check /tmp/market-stress-release.patch
-git apply /tmp/market-stress-release.patch
-tar -xzf /tmp/market-stress-release-new-files.tar.gz
+git pull --ff-only origin wip/data-automation
 sudo mountpoint -q /srv/market-stress
+# Keep the approved export as a separate release build context, outside live data.
+sudo test ! -e /srv/market-stress/release-artifacts
+sudo cp -a /tmp/market-stress-artifacts /srv/market-stress/release-artifacts
 sudo python3 scripts/staging_state.py restore --offline \
   --data-root /srv/market-stress/data --models-root /srv/market-stress/models \
   --bundle /tmp/market-stress-artifacts
@@ -72,9 +62,17 @@ sudoedit /etc/market-stress/staging.env
 
 Restore requires empty destinations and verifies every manifest file before copying. To migrate existing private accounts/history, use the separate **backup** procedure, not the public-artifact export. Existing signed snapshot payloads and job records are not rewritten. Legacy `.../staging/<job-id>` absolute references resolve to the matching directory beneath the new operations root; new snapshots store `staging/<job-id>`. Source-history hashes are checked before using relocated seeds. The backup preserves all committed snapshot directories, not only the latest pointer.
 
+## Automatic static artifact initialization
+
+Set `STAGING_ARTIFACT_BUNDLE` in the private staging env file to the approved export directory (`/srv/market-stress/release-artifacts`). It is a **build-time** source, separate from mutable EBS application state. Compose selects the `staging` Dockerfile target and passes this named BuildKit context. Only its manifest and existing Korea target CSV are copied into the image at `/opt/market-stress/artifacts`; no models, accounts or secrets are baked into the image. The build verifies the target checksum and fails if the approved source is missing/corrupt. [Docker's named build-context specification](https://docs.docker.com/reference/compose-file/build/#additional_contexts) requires Compose 2.17+ and a compatible BuildKit/Buildx builder.
+
+The staging entrypoint executes `deploy/init_artifacts.py` before Uvicorn or a one-off refresh CLI. It verifies the immutable image seed, locks the mounted data root, copies only a **missing** target atomically to `MARKET_DATA_ROOT/processed/korea/korea_targets.csv`, fsyncs it and its directory, then executes the requested command. The bind mount cannot hide the seed because `/opt` is outside `/app/data`. An existing matching file is left byte-for-byte intact; an existing different/corrupt file is never overwritten and stops startup for operator review. No target/label generation or financial calculation occurs.
+
+EBS keeps the file through container recreation and reboot. Every new process checks it again; if it was deleted, the retained image seed restores it before the API/scheduler begins. Existing EBS mount guards still prevent startup on a missing disk. The bundle need only be available for a new image build, not every reboot. Retain the approved release bundle for reproducible rebuilds. Local development Compose explicitly selects the unchanged `runtime` stage and needs no artifact build context. Raw `docker build` for development must use `--target runtime`.
+
 ## Configuration names and secrets
 
-External host configuration names are `STAGING_ROOT`, `SITE_ADDRESS`, `PAPER_ALLOWED_ORIGINS`, `PAPER_SESSION_SECRET`, `FRED_API_KEY`, `KRX_API_KEY`, `ECOS_API_KEY`, `MARKET_REFRESH_ENABLED`. Populate provider keys through the private root-owned file or an instance-role secret delivery mechanism. Never put keys/passwords in shell arguments, source patches, images, browser variables, tickets or copied command output. Do not print `docker compose config`; use `config --quiet`.
+External host configuration names are `STAGING_ARTIFACT_BUNDLE`, `STAGING_ROOT`, `SITE_ADDRESS`, `PAPER_ALLOWED_ORIGINS`, `PAPER_SESSION_SECRET`, `FRED_API_KEY`, `KRX_API_KEY`, `ECOS_API_KEY`, `MARKET_REFRESH_ENABLED`. Populate provider keys through the private root-owned file or an instance-role secret delivery mechanism. Never put keys/passwords in shell arguments, source patches, images, browser variables, tickets or copied command output. Do not print `docker compose config`; use `config --quiet`.
 
 Generate and retain a stable `PAPER_SESSION_SECRET` of at least 32 characters through a secure secret-management/editor workflow. Preserve it when restoring accounts: existing session HMACs depend on it. Rotation intentionally invalidates old sessions. Avoid automatic admin/password environment bootstrap; use the interactive CLI below.
 
@@ -92,6 +90,8 @@ stage_compose() {
     -f /opt/market-stress-early-warning/deploy/docker-compose.staging.yml "$@"
 }
 cd /opt/market-stress-early-warning
+sudo docker buildx version
+# BuildKit and Compose 2.17+ named contexts are required.
 stage_compose config --quiet
 stage_compose build --pull api frontend
 stage_compose up -d --wait --wait-timeout 360 api frontend

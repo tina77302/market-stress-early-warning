@@ -1,4 +1,5 @@
-FROM python:3.14.4-slim-bookworm
+# syntax=docker/dockerfile:1
+FROM python:3.14.4-slim-bookworm AS runtime
 ENV PYTHONDONTWRITEBYTECODE=1 PYTHONUNBUFFERED=1 PIP_NO_CACHE_DIR=1 XDG_CACHE_HOME=/tmp/cache
 WORKDIR /app
 RUN apt-get update && apt-get install -y --no-install-recommends libgomp1 && rm -rf /var/lib/apt/lists/*
@@ -21,3 +22,13 @@ USER 10001:10001
 EXPOSE 8000
 HEALTHCHECK --interval=30s --timeout=5s --start-period=30s --retries=3 CMD python -c "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/health', timeout=4)" || exit 1
 CMD ["uvicorn", "src.api.main:app", "--host", "0.0.0.0", "--port", "8000", "--workers", "1", "--timeout-graceful-shutdown", "240"]
+
+
+# Staging requires a controlled export as a named BuildKit context. Keep the
+# static seed outside /app/data so the EBS bind mount cannot hide it.
+FROM runtime AS staging
+COPY --from=deployment_artifacts --chmod=0444 /manifest.json /opt/market-stress/artifacts/manifest.json
+COPY --from=deployment_artifacts --chmod=0444 /data/processed/korea/korea_targets.csv /opt/market-stress/artifacts/processed/korea/korea_targets.csv
+COPY --chmod=0444 deploy/init_artifacts.py /opt/market-stress/init_artifacts.py
+RUN python /opt/market-stress/init_artifacts.py --verify-source
+ENTRYPOINT ["python", "/opt/market-stress/init_artifacts.py"]

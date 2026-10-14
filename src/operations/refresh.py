@@ -2,6 +2,8 @@
 import fcntl
 import hashlib
 import json
+import logging
+import os
 import subprocess
 import sys
 import uuid
@@ -13,6 +15,18 @@ from .calendar import expected, latest_closed, calendar, series_expected
 from .providers import Providers, PROVIDERS, UNITS
 from .store import database, root, utcnow, snapshot, publish, history, artifact_path
 from .validation import ValidationFailure, validate_series
+
+logger = logging.getLogger(__name__)
+
+
+def redact_diagnostic(text):
+    # Workers run local calculations, but exception text can contain environment
+    # values. Redact configured credentials before persisting any diagnostics.
+    credentials = {value for key, value in os.environ.items() if value and
+                   any(part in key.upper() for part in ('KEY', 'SECRET', 'PASSWORD', 'TOKEN', 'CREDENTIAL'))}
+    for value in sorted(credentials, key=len, reverse=True):
+        text = text.replace(value, '[REDACTED]')
+    return text
 
 SERIES = {'us':['SPY','VIX','DBAA','DGS10'],
           'korea':['KOSPI200','VKOSPI','Korea_Treasury_3Y','Korea_Corporate_AAminus_3Y']}
@@ -155,9 +169,20 @@ def refresh(market, trigger='manual', adopt_local=False, providers_factory=Provi
             # This process redirects paths only in its own memory. Live files are never changed.
             result=subprocess.run([sys.executable,'-m','src.operations.worker',market,str(stage.resolve())],cwd=PROJECT_ROOT,timeout=180,capture_output=True,text=True)
             if result.returncode:
-                # Local calculation logs contain no network URLs or credentials.
-                log=(stage/'calculation.log').read_text()[-1500:]
-                raise ValidationFailure('Staged calculation failed: '+log)
+                # The uncaught traceback reaches subprocess stderr after the
+                # worker's redirect context exits. Preserve it, not just stdout.
+                stderr = redact_diagnostic(getattr(result, 'stderr', '') or '')
+                stdout = redact_diagnostic(getattr(result, 'stdout', '') or '')
+                (stage/'worker.stderr.log').write_text(stderr)
+                (stage/'worker.stdout.log').write_text(stdout)
+                calculation = stage/'calculation.log'
+                calculation_tail = redact_diagnostic(calculation.read_text()[-1500:] if calculation.exists() else '')
+                (stage/'worker.diagnostic.log').write_text(
+                    f'exit_code={result.returncode}\nSTDERR\n{stderr[-6000:]}\nCALCULATION\n{calculation_tail}\nSTDOUT\n{stdout[-1500:]}')
+                logger.error('Staged worker failed: market=%s job=%s exit_code=%s\nSTDERR\n%s\nCALCULATION\n%s',
+                             market, job_id, result.returncode, stderr[-6000:], calculation_tail)
+                # Ledger/API/UI carry only a safe summary, never a traceback.
+                raise ValidationFailure(f'Staged calculation failed (exit_code={result.returncode}). See worker diagnostic logs.')
             payload=json.loads((stage/'snapshot.json').read_text())
             payload['expected_date_at_refresh']=date
             payload['refresh_job_id']=job_id
