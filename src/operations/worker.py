@@ -88,10 +88,14 @@ def build(market, directory):
         raise ValidationFailure('Invalid deployment model output.')
     if hashlib.sha256(model_path.read_bytes()).hexdigest()!=original_model_hash or result['risk_score_10d']!=round(float(probability[0,1])*100,1):
         raise ValidationFailure('Deployment model changed during inference; snapshot rejected.')
-    result.update(warning_threshold=50.0,warning_active=bool(probability[0,1]>=0.5),
+    from .store import utcnow, artifact_reference
+    result.update(market_observation_date=spec['common_date'],
+                  data_retrieved_at=max((item['retrieved_at'] for item in spec['series'] if item.get('retrieved_at')), default=None),
+                  model_inference_at=utcnow(),warning_threshold=50.0,warning_active=bool(probability[0,1]>=0.5),
                   input_series=spec['series'],common_feature_date=spec['common_date'],
                   model_sha256=hashlib.sha256(model_path.read_bytes()).hexdigest(),
-                  feature_count=len(columns),source_provenance=spec['provenance'],artifact_directory=str(stage))
+                  source_history_sha256=hashlib.sha256((stage/'source_history.csv').read_bytes()).hexdigest(),
+                  feature_count=len(columns),source_provenance=spec['provenance'],artifact_directory=artifact_reference(stage))
     for key in ['market_stress_index','stress_threshold','risk_score_10d']:
         if not np.isfinite(result[key]):
             raise ValidationFailure(f'Final snapshot {key} is not finite.')

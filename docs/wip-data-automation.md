@@ -13,3 +13,9 @@ Outstanding: finish regression/API/admin/browser checks; review scheduler lifecy
 Another computer needs private .env values supplied separately, historical data and existing model artifacts. Do not commit these credentials or copy account databases into Git. KRX refresh requires historical seed; do not run full run_pipeline.py because it retrains models. Production scheduling is enabled by default in Docker Compose; keep MARKET_REFRESH_ENABLED=false during setup/review.
 
 Resume with the WIP branch, install requirements, restore private configuration and required data/model artifacts, then run the targeted tests and operational CLI documented in data-reliability.md. Stop any frontend server before rebuilding shared .next outputs.
+
+## Resumed 2026-10-14
+
+The existing operations implementation was reviewed and extended; see `data-reliability.md` for exact status/recovery rules and `data-reliability-live-verification.md` for the fresh real-provider report. Both refreshes succeeded: U.S. common date October 9, MSI -1.159, 10D score 11.9, DELAYED; Korea October 13, MSI 0.744, 10D score 37.8, CURRENT. Both warning/event states are false. Existing model checksums were unchanged.
+
+Missing Dockerfiles and restart policies were added. Server scheduler/catch-up behavior is tested, but production Docker build/uptime and interactive browser verification remain unverified because Docker Desktop WSL integration and browser tools are unavailable. Moody's exact holiday/publication SLA, production retention/backups and external monitoring remain deployment limitations. Nothing was committed or pushed; changes await review.

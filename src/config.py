@@ -7,13 +7,13 @@ load_dotenv()
 PROJECT_ROOT = Path(__file__).resolve().parent.parent
 
 # Data Paths
-DATA_DIR = PROJECT_ROOT / "data"
+DATA_DIR = Path(os.getenv("MARKET_DATA_ROOT", str(PROJECT_ROOT / "data"))).resolve()
 DATA_RAW_DIR = DATA_DIR / "raw"
 DATA_PROCESSED_DIR = DATA_DIR / "processed"
 DATA_FEATURES_DIR = DATA_DIR / "features"
 
 # Models Path
-MODELS_DIR = PROJECT_ROOT / "models" / "saved"
+MODELS_DIR = Path(os.getenv("MARKET_MODELS_ROOT", str(PROJECT_ROOT / "models"))).resolve() / "saved"
 
 # API & Data Fetching Config
 FRED_API_KEY = os.getenv("FRED_API_KEY", "")

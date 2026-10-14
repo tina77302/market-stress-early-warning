@@ -1,0 +1,30 @@
+{$SITE_ADDRESS} {
+	encode zstd gzip
+	header {
+		X-Content-Type-Options nosniff
+		Referrer-Policy strict-origin-when-cross-origin
+		Strict-Transport-Security "max-age=31536000"
+		-Server
+	}
+	# Keep workspace POST origin/JSON/CSRF checks in Next.js.
+	handle /api/workspace/* {
+		reverse_proxy frontend:3000
+	}
+	@market {
+		method GET
+		path /health /api/latest /api/historical /api/validation /api/multi-horizon-validation /api/shap /api/data-health /api/korea/latest /api/korea/historical /api/korea/validation /api/korea/shap
+	}
+	handle @market {
+		reverse_proxy api:8000
+	}
+	handle /api/health {
+		reverse_proxy frontend:3000
+	}
+	# Do not expose FastAPI account/admin endpoints outside the workspace proxy.
+	handle /api/* {
+		respond "Unknown endpoint" 404
+	}
+	handle {
+		reverse_proxy frontend:3000
+	}
+}

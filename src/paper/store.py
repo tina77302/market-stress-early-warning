@@ -3,6 +3,7 @@ import sqlite3
 from contextlib import contextmanager
 from decimal import Decimal
 from pathlib import Path
+from src.config import DATA_DIR
 
 SCHEMA = """
 CREATE TABLE IF NOT EXISTS users (
@@ -62,7 +63,7 @@ def starting_cash(market):
 
 @contextmanager
 def database():
-    path = Path(os.getenv('PAPER_DB_PATH', 'data/paper/workspace.sqlite3'))
+    path = Path(os.getenv('PAPER_DB_PATH', str(DATA_DIR / 'paper/workspace.sqlite3')))
     path.parent.mkdir(parents=True, exist_ok=True, mode=0o700)
     connection = sqlite3.connect(path, timeout=15)
     connection.row_factory = sqlite3.Row

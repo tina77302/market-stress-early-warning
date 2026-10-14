@@ -1,0 +1,19 @@
+[Unit]
+Description=Market Stress private EC2 staging
+Requires=docker.service
+After=docker.service network-online.target
+Wants=network-online.target
+RequiresMountsFor=/srv/market-stress
+
+[Service]
+Type=oneshot
+RemainAfterExit=yes
+WorkingDirectory=/opt/market-stress-early-warning
+ExecStartPre=/usr/bin/mountpoint -q /srv/market-stress
+ExecStart=/usr/bin/docker compose --env-file /etc/market-stress/staging.env -f deploy/docker-compose.staging.yml up -d --wait --wait-timeout 360
+ExecStop=/usr/bin/docker compose --env-file /etc/market-stress/staging.env -f deploy/docker-compose.staging.yml stop
+TimeoutStartSec=420
+TimeoutStopSec=360
+
+[Install]
+WantedBy=multi-user.target

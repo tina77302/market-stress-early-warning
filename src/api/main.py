@@ -12,11 +12,14 @@ from src.config import (
     MODELS_DIR,
 )
 from src.models.evaluation import ModelEvaluator
+from src.runtime import allowed_origins
 from src.paper.admin import router as admin_router, bootstrap_admin
 
 
 @asynccontextmanager
 async def application_lifespan(app):
+    from src.runtime import validate_runtime
+    validate_runtime()
     bootstrap_admin()
     import os
     from src.operations.scheduler import start
@@ -48,7 +51,7 @@ app.include_router(admin_router)
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
+    allow_origins=allowed_origins(),
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],

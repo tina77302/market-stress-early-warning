@@ -8,6 +8,7 @@ import time
 from fastapi import Depends, HTTPException, Request, Response
 
 from .store import database
+from src.runtime import allowed_origins, secure_cookie
 
 COOKIE = 'mri_paper_session'
 SESSION_SECONDS = 7 * 24 * 60 * 60
@@ -49,7 +50,7 @@ def password_matches(password, encoded):
 
 def check_origin(request: Request):
     origin = request.headers.get('origin')
-    allowed = os.getenv('PAPER_ALLOWED_ORIGINS', 'http://127.0.0.1:3000,http://localhost:3000').split(',')
+    allowed = allowed_origins()
     if origin and origin not in [value.strip() for value in allowed]:
         raise HTTPException(403, 'Untrusted request origin.')
 
@@ -87,7 +88,7 @@ def set_session(db, user_id, request, response: Response):
     token = secrets.token_urlsafe(32)
     db.execute('DELETE FROM sessions WHERE expires_at<=?', (int(time.time()),))
     db.execute('INSERT INTO sessions VALUES (?,?,?)', (digest(token), user_id, int(time.time()) + SESSION_SECONDS))
-    response.set_cookie(COOKIE, token, httponly=True, secure=os.getenv('PAPER_COOKIE_SECURE', 'false').lower() == 'true', samesite='lax', max_age=SESSION_SECONDS, path='/')
+    response.set_cookie(COOKIE, token, httponly=True, secure=secure_cookie(), samesite='lax', max_age=SESSION_SECONDS, path='/')
 
 
 def throttle(request, email):

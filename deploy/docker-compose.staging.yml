@@ -1,0 +1,81 @@
+name: market-stress-staging
+services:
+  api:
+    build:
+      context: ..
+      dockerfile: Dockerfile.api
+    restart: unless-stopped
+    init: true
+    stop_grace_period: 5m
+    environment:
+      APP_ENV: staging
+      MARKET_DATA_ROOT: /app/data
+      MARKET_MODELS_ROOT: /app/models
+      MARKET_OPERATIONS_DIR: /app/data/operations
+      PAPER_DB_PATH: /app/data/paper/workspace.sqlite3
+      MARKET_REFRESH_ENABLED: ${MARKET_REFRESH_ENABLED:-false}
+      PAPER_SESSION_SECRET: ${PAPER_SESSION_SECRET:?Set a stable session secret outside the repository}
+      PAPER_ALLOWED_ORIGINS: ${PAPER_ALLOWED_ORIGINS:?Set the exact HTTPS site origin}
+      PAPER_COOKIE_SECURE: 'true'
+      FRED_API_KEY: ${FRED_API_KEY:-}
+      KRX_API_KEY: ${KRX_API_KEY:-}
+      ECOS_API_KEY: ${ECOS_API_KEY:-}
+    volumes:
+      - type: bind
+        source: ${STAGING_ROOT:?Set the EBS mount directory}/data
+        target: /app/data
+        bind:
+          create_host_path: false
+      - type: bind
+        source: ${STAGING_ROOT:?Set the EBS mount directory}/models
+        target: /app/models
+        read_only: true
+        bind:
+          create_host_path: false
+    networks: [application]
+    read_only: true
+    tmpfs: [/tmp:size=128m,mode=1777]
+    security_opt: [no-new-privileges:true]
+    cap_drop: [ALL]
+  frontend:
+    build:
+      context: ../frontend
+      dockerfile: Dockerfile
+    restart: unless-stopped
+    init: true
+    environment:
+      API_INTERNAL_URL: http://api:8000
+    depends_on:
+      api:
+        condition: service_healthy
+    networks: [application]
+    read_only: true
+    tmpfs: [/tmp:size=128m,mode=1777]
+    security_opt: [no-new-privileges:true]
+    cap_drop: [ALL]
+  proxy:
+    image: caddy:2.11.7-alpine
+    restart: unless-stopped
+    ports: ['80:80', '443:443', '443:443/udp']
+    environment:
+      SITE_ADDRESS: ${SITE_ADDRESS:?Set the staging hostname before starting the proxy}
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - type: bind
+        source: ${STAGING_ROOT}/caddy/data
+        target: /data
+        bind:
+          create_host_path: false
+      - type: bind
+        source: ${STAGING_ROOT}/caddy/config
+        target: /config
+        bind:
+          create_host_path: false
+    depends_on:
+      frontend:
+        condition: service_healthy
+    networks: [application]
+    security_opt: [no-new-privileges:true]
+networks:
+  application:
+    driver: bridge

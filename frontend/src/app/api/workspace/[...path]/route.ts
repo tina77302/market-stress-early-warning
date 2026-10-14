@@ -2,8 +2,8 @@ import { NextRequest, NextResponse } from 'next/server';
 
 export const dynamic = 'force-dynamic';
 const allowed = new Set(['auth/register', 'auth/login', 'auth/logout', 'auth/me', 'admin/overview', 'admin/users', 'admin/data-health', 'paper/securities', 'paper/quote', 'paper/portfolio', 'paper/positions', 'paper/orders', 'paper/performance']);
-async function proxy(request: NextRequest, { params }: { params: { path: string[] } }) {
-  const path = params.path.join('/');
+async function proxy(request: NextRequest, { params }: { params: Promise<{ path: string[] }> }) {
+  const path = (await params).path.join('/');
   if (!allowed.has(path)) return NextResponse.json({ detail: 'Unknown workspace endpoint.' }, { status: 404 });
   if (request.method === 'POST') {
     const origin = request.headers.get('origin');

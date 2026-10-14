@@ -1,6 +1,6 @@
 """Shared validated snapshots for every user; no subscription inputs."""
 from datetime import datetime, timezone, timedelta
-from .calendar import expected
+from .calendar import expected, series_expected
 from .store import snapshot, history, database
 
 
@@ -24,16 +24,21 @@ def health(market, now=None, *, current=None):
     payload=current['payload'] if current else {}
     status='ERROR' if not current else 'CURRENT'
     series=[dict(s) for s in payload.get('input_series',[])]
+    from .refresh import SERIES
+    required=set(SERIES[market])
+    available={item['series'] for item in series}
+    recent_success=bool(job and job['status']=='SUCCESS' and job['expected_date']==date)
     for item in series:
-        item['status']='CURRENT' if date and item['latest_observation_date']>=date and item['retrieved_at'] else 'STALE'
+        item['expected_observation_date']=series_expected(market,item['series'],date)
+        item['status']='CURRENT' if date and item['latest_observation_date']>=item['expected_observation_date'] and item['retrieved_at'] else 'DELAYED' if recent_success and item.get('retrieved_at') else 'STALE'
     if current:
-        if not date or payload.get('source_provenance')!='provider-validated' or current['observation_date']<date or any(s['status']!='CURRENT' for s in series):
+        if not required.issubset(available) or not date or payload.get('source_provenance')!='provider-validated' or current['observation_date']<min(series_expected(market,name,date) for name in required) or any(s['status']!='CURRENT' for s in series):
             status='STALE'
         if job and job['status']=='ERROR':
             outcomes=(job.get('report') or {}).get('series',[])
             success=sum(s['status']!='ERROR' for s in outcomes)
             status='PARTIAL' if 0<success<len(outcomes) else 'ERROR'
-        elif status=='STALE' and job and job['status']=='SUCCESS' and payload.get('source_provenance')=='provider-validated':
+        elif status=='STALE' and recent_success and required.issubset(available) and payload.get('source_provenance')=='provider-validated':
             status='DELAYED'
     report=job.get('report') if job else None
     attempted=(report or {}).get('series') or (report or {}).get('input_series') or []
@@ -52,4 +57,7 @@ def current_payload(market):
         from fastapi import HTTPException
         raise HTTPException(503,detail={'message':'Current market risk unavailable. No validated snapshot.','data_health':health(market)})
     payload={key:value for key,value in current['payload'].items() if key!='artifact_directory'}
+    payload.setdefault('market_observation_date',payload['last_updated'])
+    payload.setdefault('data_retrieved_at',max((s['retrieved_at'] for s in payload.get('input_series',[]) if s.get('retrieved_at')),default=None))
+    payload.setdefault('model_inference_at',None)
     return {**payload,'data_health':health(market,current=current)}

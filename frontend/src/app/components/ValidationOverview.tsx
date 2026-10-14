@@ -147,7 +147,7 @@ export default function ValidationOverview({ market, children }: { market: Marke
   useEffect(() => {
     const controller = new AbortController();
     setData(null); setLoading(true); setError(false);
-    const base = process.env.NEXT_PUBLIC_API_URL || 'http://127.0.0.1:8000';
+    const base = '';
     async function request(path: string) { const response = await fetch(`${base}${path}`, { signal: controller.signal }); if (!response.ok) throw new Error(path); return response.json(); }
     async function load() {
       try {

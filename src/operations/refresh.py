@@ -1,5 +1,6 @@
 """FETCH → STAGE → VALIDATE → unchanged inference → atomic publication."""
 import fcntl
+import hashlib
 import json
 import subprocess
 import sys
@@ -8,9 +9,9 @@ from pathlib import Path
 import pandas as pd
 from src.config import PROJECT_ROOT, DATA_RAW_DIR
 from . import alerts
-from .calendar import expected
+from .calendar import expected, latest_closed, calendar, series_expected
 from .providers import Providers, PROVIDERS, UNITS
-from .store import database, root, utcnow, snapshot, publish, history
+from .store import database, root, utcnow, snapshot, publish, history, artifact_path
 from .validation import ValidationFailure, validate_series
 
 SERIES = {'us':['SPY','VIX','DBAA','DGS10'],
@@ -33,8 +34,11 @@ def legacy(market):
 def seeds(market):
     current=snapshot(market)
     if current:
-        path=Path(current['payload']['artifact_directory'])/'source_history.csv'
+        path=artifact_path(current['payload'].get('artifact_directory', 'missing'))/'source_history.csv'
         if path.exists():
+            digest=current['payload'].get('source_history_sha256')
+            if digest and hashlib.sha256(path.read_bytes()).hexdigest()!=digest:
+                raise ValidationFailure('Snapshot source history integrity check failed.')
             frame=pd.read_csv(path,index_col='Date',parse_dates=True)
             return {col:frame[[col]] for col in frame.columns}
     return legacy(market)
@@ -101,11 +105,14 @@ def refresh(market, trigger='manual', adopt_local=False, providers_factory=Provi
             db.execute("UPDATE jobs SET status='ERROR',finished_at=?,error_type='InterruptedJob',error_message='Previous worker exited before completing refresh.' WHERE market=? AND status='RUNNING'",(started,market))
             db.execute('INSERT INTO jobs (job_id,market,trigger,expected_date,started_at,status) VALUES (?,?,?,?,?,?)',(job_id,market,'adopt-local' if adopt_local else trigger,date,started,'RUNNING'))
             if date:
-                db.execute('INSERT INTO scheduler (market,heartbeat_at,expected_date,expected_run_at,last_run_at,last_run_expected_date) VALUES (?,?,?,?,?,?) ON CONFLICT(market) DO UPDATE SET last_run_at=excluded.last_run_at,last_run_expected_date=excluded.last_run_expected_date', (market,started,date,deadline,started,None if adopt_local else date))
+                db.execute('INSERT INTO scheduler (market,heartbeat_at,expected_date,expected_run_at,last_run_at,last_run_expected_date) VALUES (?,?,?,?,?,?) ON CONFLICT(market) DO UPDATE SET last_run_at=excluded.last_run_at,last_run_expected_date=excluded.last_run_expected_date', (market,'1970-01-01T00:00:00+00:00',date,deadline,started,None if adopt_local else date))
+        committed=False
         report={'job_id':job_id,'market':market,'expected_date':date,'series':[]}
         try:
             if not date:
                 raise ValidationFailure('Cannot prove expected exchange session; calendar unavailable.')
+            fetch_end=latest_closed(market)
+            report['fetch_through_date']=fetch_end
             base=seeds(market)
             frames={}
             if adopt_local:
@@ -121,15 +128,20 @@ def refresh(market, trigger='manual', adopt_local=False, providers_factory=Provi
                     info={'series':name,'provider':PROVIDERS[name],'unit':UNITS[name]}
                     try:
                         if market=='us':
-                            frame,retrieved=providers.yahoo(name,date) if name in ['SPY','VIX'] else providers.fred(name,date)
+                            frame,retrieved=providers.yahoo(name,fetch_end) if name in ['SPY','VIX'] else providers.fred(name,fetch_end)
                         else:
-                            frame,retrieved=providers.krx(name,date,base.get(name,pd.DataFrame())) if name in ['KOSPI200','VKOSPI'] else providers.ecos(name,date)
-                        latest=validate_series(frame,name,positive=name in ['SPY','VIX','KOSPI200','VKOSPI'],allow_missing=True,today=date)
+                            frame,retrieved=providers.krx(name,fetch_end,base.get(name,pd.DataFrame())) if name in ['KOSPI200','VKOSPI'] else providers.ecos(name,fetch_end)
+                        latest=validate_series(frame,name,positive=name in ['SPY','VIX','KOSPI200','VKOSPI'],allow_missing=True,today=fetch_end)
                         if name in ['KOSPI200','VKOSPI']:
                             prior=base.get(name,pd.DataFrame())
                             frame=pd.concat([prior,frame]);frame=frame[~frame.index.duplicated(keep='last')].sort_index()
+                        series_date=series_expected(market,name,date)
+                        info['expected_observation_date']=series_date
+                        sessions=calendar(market,pd.Timestamp(date).year).sessions_in_range(pd.Timestamp(latest),pd.Timestamp(series_date)) if latest<series_date else []
+                        if len(sessions)>6:
+                            raise ValidationFailure(f'{name}: required input is more than five due exchange sessions stale.')
                         frames[name]=frame
-                        info.update(latest_observation_date=latest,retrieved_at=retrieved,status='CURRENT' if latest==date else 'DELAYED')
+                        info.update(value=float(frame.loc[pd.Timestamp(latest),name]),observation_date=latest,source=PROVIDERS[name],latest_observation_date=latest,retrieved_at=retrieved,status='CURRENT' if latest>=series_date else 'DELAYED')
                     except Exception as exc:
                         info.update(latest_observation_date=None,retrieved_at=None,status='ERROR',error_type=type(exc).__name__,error_message=str(exc)[:500])
                     info['attempt_count']=providers.counts.get(name,0)
@@ -139,7 +151,7 @@ def refresh(market, trigger='manual', adopt_local=False, providers_factory=Provi
                     raise ValidationFailure('Required provider series failed: '+', '.join(s['series'] for s in failed))
             stage=root()/'staging'/job_id
             stage.mkdir(parents=True)
-            spec=stage_inputs(market,stage,frames,report['series'],'legacy-cache' if adopt_local else 'provider-validated',date)
+            spec=stage_inputs(market,stage,frames,report['series'],'legacy-cache' if adopt_local else 'provider-validated',fetch_end)
             # This process redirects paths only in its own memory. Live files are never changed.
             result=subprocess.run([sys.executable,'-m','src.operations.worker',market,str(stage.resolve())],cwd=PROJECT_ROOT,timeout=180,capture_output=True,text=True)
             if result.returncode:
@@ -153,13 +165,20 @@ def refresh(market, trigger='manual', adopt_local=False, providers_factory=Provi
             previous=snapshot(market)
             if previous and payload['last_updated']<previous['observation_date']:
                 raise ValidationFailure('Provider response would regress the last-known-good date.')
-            publish(job_id,market,payload)
+            report.update(status='SUCCESS',snapshot_published=True)
+            publish(job_id,market,payload,report)
+            committed=True
             if payload['last_updated']<date or adopt_local:
                 alerts.emit(market,'required_series_stale',report,job_id)
             if payload['anomalies']:
                 alerts.emit(market,'large_market_move_review',{'anomalies':payload['anomalies']},job_id)
             report.update(status='SUCCESS',snapshot_published=True)
         except Exception as exc:
+            if committed:
+                report['alert_error_type']=type(exc).__name__
+                with database() as db:
+                    db.execute('UPDATE jobs SET report=? WHERE job_id=?',(json.dumps(report,allow_nan=False),job_id))
+                return report
             report.update(status='ERROR',error_type=type(exc).__name__,error_message=str(exc)[:2000],snapshot_published=False)
             with database() as db:
                 db.execute("UPDATE jobs SET status='ERROR',finished_at=?,error_type=?,error_message=?,report=? WHERE job_id=?",(utcnow(),type(exc).__name__,report['error_message'],json.dumps(report,allow_nan=False),job_id))

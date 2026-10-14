@@ -4,7 +4,7 @@ import time
 from .refresh import refresh
 from .service import health
 from .store import history
-from .scheduler import tick
+from .scheduler import tick, SchedulerLease
 
 parser=argparse.ArgumentParser(description='Validated market-data operations; never trains models.')
 parser.add_argument('command',choices=['refresh','adopt-local','health','history','schedule'])
@@ -13,10 +13,11 @@ parser.add_argument('--once',action='store_true',help='Run one scheduler catch-u
 args=parser.parse_args()
 markets=['us','korea'] if args.market=='both' else [args.market]
 if args.command=='schedule':
-    while True:
-        print(json.dumps(tick(),indent=2,ensure_ascii=False),flush=True)
-        if args.once:break
-        time.sleep(60)
+    with SchedulerLease():
+        while True:
+            print(json.dumps(tick(),indent=2,ensure_ascii=False),flush=True)
+            if args.once:break
+            time.sleep(60)
 else:
     reports=[]
     for market in markets:

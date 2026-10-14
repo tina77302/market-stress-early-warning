@@ -186,3 +186,253 @@ def test_no_snapshot_api_fails_closed():
     from fastapi import HTTPException
     with pytest.raises(HTTPException) as error:service.current_payload('us')
     assert error.value.status_code==503
+
+
+@pytest.mark.parametrize('market',['us','korea'])
+@pytest.mark.parametrize('failure',['timeout','exception','empty','malformed','missing','numeric','stale','feature','inference'])
+def test_refresh_failure_matrix_preserves_each_market_lkg(monkeypatch,market,failure):
+    import requests
+    from types import SimpleNamespace
+    jid=job(market); old=payload();old['input_series']=[{'series':n,'latest_observation_date':'2026-10-08','retrieved_at':store.utcnow()} for n in refresh_module.SERIES[market]]
+    sid=store.publish(jid,market,old)
+    monkeypatch.setattr(refresh_module,'expected',lambda _:('2026-10-09','2026-10-10T08:00:00+00:00'))
+    monkeypatch.setattr(refresh_module,'seeds',lambda _: {})
+    dates=pd.bdate_range(end='2026-10-09',periods=500)
+    class FixtureProviders:
+        def __init__(self,_):self.counts={}
+        def yahoo(self,name,date,*args):
+            self.counts[name]=1
+            if name==refresh_module.SERIES[market][0]:
+                if failure=='timeout':raise requests.Timeout('fixture timeout')
+                if failure=='exception':raise RuntimeError('fixture exception')
+                if failure=='empty':return pd.DataFrame(),store.utcnow()
+                if failure=='malformed':return 'invalid',store.utcnow()
+                if failure=='missing':return pd.DataFrame({'other':[1.]},index=dates[:1]),store.utcnow()
+                if failure=='numeric':return pd.DataFrame({name:[np.inf]},index=dates[:1]),store.utcnow()
+                if failure=='stale':return pd.DataFrame({name:np.arange(490,dtype=float)+10},index=dates[:490]),store.utcnow()
+            return pd.DataFrame({name:np.arange(500,dtype=float)+10},index=dates),store.utcnow()
+        fred=yahoo;krx=yahoo;ecos=yahoo
+    def worker(*args,**kwargs):
+        stage=store.root()/'staging'/store.history()[0]['job_id']
+        (stage/'calculation.log').write_text(f'{failure} failed')
+        return SimpleNamespace(returncode=1)
+    monkeypatch.setattr(refresh_module.subprocess,'run',worker)
+    result=refresh_module.refresh(market,providers_factory=FixtureProviders)
+    assert result['status']=='ERROR' and not result['snapshot_published']
+    assert store.snapshot(market)['snapshot_id']==sid
+    assert store.history(market,1)[0]['finished_at']
+    assert not service.health(market)['is_current']
+
+
+@pytest.mark.parametrize('market',['us','korea'])
+@pytest.mark.parametrize('alert_failure',[False,True])
+def test_successful_lifecycle_and_duplicate_content(monkeypatch,market,alert_failure):
+    from types import SimpleNamespace
+    monkeypatch.setattr(refresh_module,'expected',lambda _:('2026-10-12','2026-10-13T08:00:00+00:00'))
+    monkeypatch.setattr(refresh_module,'seeds',lambda _: {})
+    if alert_failure:
+        monkeypatch.setattr(refresh_module.alerts,'emit',lambda *a: (_ for _ in ()).throw(RuntimeError('outbox unavailable')))
+    dates=pd.bdate_range(end='2026-10-09',periods=500)
+    class FixtureProviders:
+        def __init__(self,_):self.counts={}
+        def yahoo(self,name,date,*args):
+            self.counts[name]=1
+            return pd.DataFrame({name:np.arange(500,dtype=float)+10},index=dates),store.utcnow()
+        fred=yahoo;krx=yahoo;ecos=yahoo
+    def worker(args,**kwargs):
+        from pathlib import Path
+        stage=Path(args[-1]);spec=json.loads((stage/'inputs.json').read_text())
+        result={**payload('2026-10-09'),'input_series':spec['series'],'artifact_directory':str(stage),'anomalies':[],'model_inference_at':store.utcnow()}
+        (stage/'snapshot.json').write_text(json.dumps(result))
+        return SimpleNamespace(returncode=0)
+    monkeypatch.setattr(refresh_module.subprocess,'run',worker)
+    first=refresh_module.refresh(market,providers_factory=FixtureProviders)
+    sid=store.snapshot(market)['snapshot_id']
+    second=refresh_module.refresh(market,providers_factory=FixtureProviders)
+    assert first['status']==second['status']=='SUCCESS'
+    assert store.snapshot(market)['snapshot_id']==sid
+    assert all(j['report']['series'] and j['snapshot_published'] for j in store.history(market))
+    with store.database() as db:assert db.execute('SELECT COUNT(*) FROM snapshots').fetchone()[0]==1
+
+
+def test_delayed_expires_when_next_session_due(monkeypatch):
+    jid=job();store.publish(jid,'us',payload())
+    with store.database() as db:db.execute("UPDATE jobs SET expected_date='2026-10-09' WHERE job_id=?",(jid,))
+    monkeypatch.setattr(service,'expected',lambda *a:('2026-10-09','2026-10-10T08:00:00+00:00'))
+    assert service.health('us')['status']=='DELAYED'
+    assert all(s['status']=='DELAYED' for s in service.health('us')['input_series'])
+    monkeypatch.setattr(service,'expected',lambda *a:('2026-10-12','2026-10-13T08:00:00+00:00'))
+    assert service.health('us')['status']=='STALE'
+
+
+def test_missing_required_metadata_cannot_claim_current(monkeypatch):
+    jid=job();data=payload();data['input_series']=data['input_series'][:1];store.publish(jid,'us',data)
+    monkeypatch.setattr(service,'expected',lambda *a:('2026-10-08','2026-10-09T08:00:00+00:00'))
+    assert not service.health('us')['is_current']
+
+
+def test_timezone_and_us_dst():
+    from zoneinfo import ZoneInfo
+    summer=datetime(2026,7,8,8,tzinfo=timezone.utc)
+    winter=datetime(2026,12,9,9,tzinfo=timezone.utc)
+    assert expected('us',summer)[1].endswith('08:00:00+00:00')
+    assert expected('us',winter)[1].endswith('09:00:00+00:00')
+    assert expected('us',summer)==expected('us',summer.astimezone(ZoneInfo('Asia/Seoul')))
+    with pytest.raises(ValueError):expected('us',summer.replace(tzinfo=None))
+
+
+def test_scheduler_distinguishes_failed_run_and_missed_run(monkeypatch):
+    monkeypatch.setattr(scheduler,'expected',lambda *a:('2026-10-09','2026-10-10T08:00:00+00:00'))
+    with store.database() as db:
+        db.execute("INSERT INTO jobs (job_id,market,trigger,expected_date,started_at,status) VALUES ('old','us','startup-catch-up','2026-10-09',?,'ERROR')",((datetime.now(timezone.utc)-timedelta(hours=1)).isoformat(),))
+    calls=[];monkeypatch.setattr(scheduler,'refresh',lambda market,trigger:calls.append((market,trigger)) or {})
+    scheduler.tick()
+    assert calls==[('us','scheduled-retry'),('korea','startup-catch-up')]
+
+
+def test_interrupted_job_recovered_under_lock(monkeypatch):
+    job();monkeypatch.setattr(refresh_module,'seeds',lambda _: (_ for _ in ()).throw(ValidationFailure('seed missing')))
+    refresh_module.refresh('us')
+    recovered=next(j for j in store.history() if j['job_id']=='test-us')
+    assert recovered['status']=='ERROR' and recovered['error_type']=='InterruptedJob'
+
+
+def test_api_metadata_and_health(monkeypatch):
+    from fastapi.testclient import TestClient
+    from src.api.main import app
+    for market in ['us','korea']:
+        jid=job(market);store.publish(jid,market,payload())
+    client=TestClient(app)
+    for route in ['/api/latest','/api/korea/latest']:
+        response=client.get(route)
+        assert response.status_code==200
+        result=response.json()
+        assert result['market_observation_date']==result['last_updated']
+        assert 'data_retrieved_at' in result and 'model_inference_at' in result
+        assert 'artifact_directory' not in result
+        assert result['data_health']['last_known_good_date']==result['last_updated']
+    assert client.get('/api/data-health').status_code==200
+    assert client.get('/api/admin/data-health').status_code==401
+
+
+def test_fetch_cutoff_includes_closed_session_before_publication_deadline():
+    from src.operations.calendar import latest_closed
+    now=datetime(2026,10,14,0,15,tzinfo=timezone.utc)
+    assert expected('us',now)[0]=='2026-10-12'
+    assert latest_closed('us',now)=='2026-10-13'
+    assert latest_closed('korea',now)=='2026-10-13'
+
+
+def test_actual_refresh_collision_and_independent_markets(monkeypatch):
+    import threading
+    from concurrent.futures import ThreadPoolExecutor
+    entered=threading.Event();release=threading.Event()
+    def seed(market):
+        if market=='us':
+            entered.set();assert release.wait(10)
+        raise ValidationFailure('fixture seed unavailable')
+    monkeypatch.setattr(refresh_module,'seeds',seed)
+    with ThreadPoolExecutor(max_workers=2) as pool:
+        running=pool.submit(refresh_module.refresh,'us',trigger='scheduled-retry')
+        assert entered.wait(10)
+        try:
+            collision=refresh_module.refresh('us',trigger='manual')
+            assert collision['status']=='ALREADY_RUNNING'
+            assert refresh_module.refresh('korea')['status']=='ERROR'
+        finally:release.set()
+        assert running.result()['status']=='ERROR'
+    assert len(store.history('us'))==1 and len(store.history('korea'))==1
+
+
+def test_scheduler_background_execution(monkeypatch):
+    import threading
+    ran=threading.Event();monkeypatch.setattr(scheduler,'tick',ran.set)
+    stop=scheduler.start()
+    try:assert ran.wait(5)
+    finally:stop.set()
+
+
+@pytest.mark.parametrize('failure',['feature','inference'])
+def test_real_inference_failure_and_no_training(tmp_path,monkeypatch,failure):
+    """Use real staged calculators/features and existing weights; force inference to fail."""
+    from src.operations import worker
+    from src.api import main as api
+    import joblib, hashlib
+    # Redirecting calculator globals must remain isolated from this test process too.
+    import subprocess, sys
+    script='''
+import json, sys
+from pathlib import Path
+from src.operations.refresh import legacy, stage_inputs
+from src.operations.worker import build
+from src.api import main as api
+from src.operations.validation import ValidationFailure
+import joblib
+stage=Path(sys.argv[1]);stage.mkdir()
+frames=legacy('us')
+stage_inputs('us',stage,frames,[],'legacy-cache','2026-10-14')
+class BrokenModel:
+    def predict_proba(self,*args,**kwargs):raise RuntimeError('injected inference failure')
+joblib.load=lambda *args,**kwargs:BrokenModel()
+if sys.argv[2]=='feature':
+    from src.features.engineering import FeatureEngineer
+    def fail_features(self):raise RuntimeError('injected feature failure')
+    FeatureEngineer.generate_features=fail_features
+try:build('us',stage)
+except RuntimeError as exc:
+    assert 'injected '+sys.argv[2]+' failure' in str(exc)
+else:raise AssertionError('Inference unexpectedly succeeded')
+assert not (stage/'snapshot.json').exists()
+'''
+    paths=[api.MODELS_DIR/'xgboost_latest.joblib',api.KOREA_MODEL_DIR/'xgboost_10d_latest.joblib']
+    before=[hashlib.sha256(p.read_bytes()).hexdigest() for p in paths]
+    result=subprocess.run([sys.executable,'-c',script,str(tmp_path/'worker'),failure],capture_output=True,text=True,timeout=180)
+    assert result.returncode==0,result.stderr[-2000:]
+    assert before==[hashlib.sha256(p.read_bytes()).hexdigest() for p in paths]
+
+
+def test_failed_refresh_retries_even_with_current_lkg(monkeypatch):
+    jid=job();store.publish(jid,'us',payload('2026-10-09'))
+    with store.database() as db:
+        db.execute("INSERT INTO jobs (job_id,market,trigger,expected_date,started_at,status) VALUES ('failed','us','manual','2026-10-09',?,'ERROR')",((datetime.now(timezone.utc)-timedelta(hours=1)).isoformat(),))
+        db.execute("UPDATE jobs SET started_at=? WHERE job_id=?",((datetime.now(timezone.utc)-timedelta(hours=2)).isoformat(),jid))
+    monkeypatch.setattr(scheduler,'expected',lambda *a:('2026-10-09','2026-10-10T08:00:00+00:00'))
+    calls=[];monkeypatch.setattr(scheduler,'refresh',lambda market,trigger:calls.append((market,trigger)) or {})
+    scheduler.tick()
+    assert ('us','scheduled-retry') in calls
+
+
+def test_publication_requires_matching_market_job():
+    jid=job('us')
+    with pytest.raises(ValueError,match='same market'):store.publish(jid,'korea',payload())
+    assert store.snapshot('korea') is None
+
+
+def test_treasury_holiday_differs_from_equity_calendar(monkeypatch):
+    from src.operations.calendar import series_expected
+    assert series_expected('us','DGS10','2026-10-12')=='2026-10-09'
+    assert series_expected('us','SPY','2026-10-12')=='2026-10-12'
+    jid=job();data=payload('2026-10-09')
+    for item in data['input_series']:
+        if item['series']!='DGS10':item['latest_observation_date']='2026-10-12'
+    store.publish(jid,'us',data)
+    monkeypatch.setattr(service,'expected',lambda *a:('2026-10-12','2026-10-13T08:00:00+00:00'))
+    result=service.health('us')
+    assert result['status']=='CURRENT'
+    assert result['input_series'][-1]['expected_observation_date']=='2026-10-09'
+
+
+@pytest.mark.parametrize('status,body,exception',[(200,b'',TransientProviderError),(429,b'limited',TransientProviderError),(503,b'failure',TransientProviderError),(401,b'denied',ValidationFailure)])
+def test_http_failure_classification(monkeypatch,status,body,exception):
+    import requests
+    response=requests.Response();response.status_code=status;response._content=body
+    monkeypatch.setattr('src.operations.providers.requests.get',lambda *a,**kw:response)
+    with pytest.raises(exception):Providers.http('https://fixture.invalid')
+
+
+def test_malformed_fred_schema_is_permanent(monkeypatch):
+    from types import SimpleNamespace
+    jid=job();provider=Providers(jid,sleep=lambda _:pytest.fail('schema error retried'))
+    monkeypatch.setattr(provider,'http',lambda *a,**kw:SimpleNamespace(text='unexpected,column\n1,2\n'))
+    with pytest.raises(ValidationFailure):provider.fred('DBAA','2026-10-12')
+    assert len(store.history()[0]['attempts'])==1

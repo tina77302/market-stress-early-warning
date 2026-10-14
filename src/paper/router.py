@@ -90,7 +90,7 @@ def logout(request: Request, response: Response, user=Depends(auth.protected_wri
     with database() as db:
         db.execute('DELETE FROM sessions WHERE token_hash=?', (auth.digest(request.cookies[auth.COOKIE]),))
         db.commit()
-    response.delete_cookie(auth.COOKIE, path='/', secure=os.getenv('PAPER_COOKIE_SECURE', 'false').lower() == 'true', httponly=True, samesite='lax')
+    response.delete_cookie(auth.COOKIE, path='/', secure=auth.secure_cookie(), httponly=True, samesite='lax')
     return {'logged_out': True}
 
 

@@ -45,7 +45,7 @@ export function useMarket(market: Market) {
   useEffect(() => {
     const controller = new AbortController();
     const prefix = market === 'korea' ? '/api/korea' : '/api';
-    const base = process.env.NEXT_PUBLIC_API_URL || 'http://127.0.0.1:8000';
+    const base = '';
     setLoading(true);
     async function request(path: string) {
       const response = await fetch(`${base}${prefix}/${path}`, { signal: controller.signal });

@@ -556,3 +556,6 @@ html[lang="ko"] .font-mono { font-family: ui-monospace, 'MRI Korean', monospace;
 .data-health-notice summary { cursor: pointer; font-size: 12px; }
 .data-health-notice ul { padding: 8px 0; list-style: none; }
 .data-health-notice li { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 8px; padding: 4px 0; border-top: 1px solid #4a4233; }
+
+.data-health-current { border-left-color: #47e1bf; background: #142c2a; color: #acd6ca; }
+.data-health-current strong { color: #47e1bf; }

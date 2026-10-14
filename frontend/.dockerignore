@@ -1,0 +1,9 @@
+node_modules
+.next
+.env*
+tsconfig.tsbuildinfo
+
+*.env
+*.env.*
+**/*.env
+**/*.env.*

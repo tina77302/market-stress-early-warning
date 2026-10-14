@@ -17,7 +17,7 @@ function MarketRiskContext() {
   const [us, setUS] = useState<Latest | null>(null), [korea, setKorea] = useState<Latest | null>(null);
   useEffect(() => {
     const controller = new AbortController();
-    const base = process.env.NEXT_PUBLIC_API_URL || 'http://127.0.0.1:8000';
+    const base = '';
     async function current(path: string) { const response = await fetch(`${base}${path}`, { signal: controller.signal }); if (!response.ok) throw new Error('Market context unavailable'); return response.json(); }
     void Promise.allSettled([current('/api/latest'), current('/api/korea/latest')]).then(([a, b]) => { if (controller.signal.aborted) return; setUS(a.status === 'fulfilled' ? a.value : null); setKorea(b.status === 'fulfilled' ? b.value : null); });
     return () => controller.abort();
