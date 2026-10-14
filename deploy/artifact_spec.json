@@ -1,0 +1,21 @@
+{
+  "format": 1,
+  "required_data": [
+    "raw/raw_market_data.csv",
+    "raw/korea/krx_indices.csv",
+    "raw/korea/vkospi.csv",
+    "raw/korea/ecos_credit.csv",
+    "processed/korea/korea_targets.csv",
+    "processed/oos_predictions.csv",
+    "processed/oos_predictions_10d.csv",
+    "processed/multi_horizon_metrics.csv",
+    "features/shap/latest_shap.json",
+    "processed/korea/korea_oos_predictions_10d.csv",
+    "processed/korea/korea_model_evaluation_10d.csv",
+    "processed/korea/shap/latest_shap.json"
+  ],
+  "models": [
+    "saved/xgboost_latest.joblib",
+    "korea/xgboost_10d_latest.joblib"
+  ]
+}

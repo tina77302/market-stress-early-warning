@@ -17,6 +17,7 @@ COPY src/korea ./src/korea
 COPY src/models/evaluation.py ./src/models/evaluation.py
 COPY src/models/__init__.py ./src/models/__init__.py
 COPY scripts/staging_state.py ./scripts/staging_state.py
+COPY deploy/artifact_spec.json ./deploy/artifact_spec.json
 RUN groupadd --gid 10001 app && useradd --uid 10001 --gid app --no-create-home app
 USER 10001:10001
 EXPOSE 8000
@@ -27,8 +28,17 @@ CMD ["uvicorn", "src.api.main:app", "--host", "0.0.0.0", "--port", "8000", "--wo
 # Staging requires a controlled export as a named BuildKit context. Keep the
 # static seed outside /app/data so the EBS bind mount cannot hide it.
 FROM runtime AS staging
-COPY --from=deployment_artifacts --chmod=0444 /manifest.json /opt/market-stress/artifacts/manifest.json
-COPY --from=deployment_artifacts --chmod=0444 /data/processed/korea/korea_targets.csv /opt/market-stress/artifacts/processed/korea/korea_targets.csv
-COPY --chmod=0444 deploy/init_artifacts.py /opt/market-stress/init_artifacts.py
-RUN python /opt/market-stress/init_artifacts.py --verify-source
+# Build-time verification and ownership/mode normalization need root. Public
+# research/seed data is a named context; model weights are never copied here.
+USER root
+COPY --from=deployment_artifacts /manifest.json /opt/market-stress/artifacts/manifest.json
+COPY --from=deployment_artifacts /data/raw/ /opt/market-stress/artifacts/data/raw/
+COPY --from=deployment_artifacts /data/processed/ /opt/market-stress/artifacts/data/processed/
+COPY --from=deployment_artifacts /data/features/ /opt/market-stress/artifacts/data/features/
+COPY deploy/init_artifacts.py deploy/artifact_spec.json /opt/market-stress/
+RUN find /opt/market-stress -type d -exec chmod 0555 {} + \
+    && find /opt/market-stress -type f -exec chmod 0444 {} + \
+    && python /opt/market-stress/init_artifacts.py --verify-source
+# EBS data is owned by this runtime UID; never launch API/CLI as root.
+USER 10001:10001
 ENTRYPOINT ["python", "/opt/market-stress/init_artifacts.py"]

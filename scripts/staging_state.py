@@ -12,18 +12,10 @@ import shutil
 import sqlite3
 from pathlib import Path
 
-REQUIRED = [
-    'raw/raw_market_data.csv', 'raw/korea/krx_indices.csv',
-    'raw/korea/vkospi.csv', 'raw/korea/ecos_credit.csv',
-    'processed/korea/korea_targets.csv',
-    'processed/oos_predictions.csv', 'processed/oos_predictions_10d.csv',
-    'processed/multi_horizon_metrics.csv',
-    'features/shap/latest_shap.json',
-    'processed/korea/korea_oos_predictions_10d.csv',
-    'processed/korea/korea_model_evaluation_10d.csv',
-    'processed/korea/shap/latest_shap.json',
-]
-MODELS = ['saved/xgboost_latest.joblib', 'korea/xgboost_10d_latest.joblib']
+# One reviewed dependency list is shared by export and startup installation.
+_spec = json.loads((Path(__file__).resolve().parents[1] / 'deploy/artifact_spec.json').read_text())
+REQUIRED = _spec['required_data']
+MODELS = _spec['models']
 
 
 def checksum(path):
