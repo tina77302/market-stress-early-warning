@@ -66,6 +66,9 @@ def record_attempt(job_id, provider, series, attempt, started_at, status, latest
 
 
 def publish(job_id, market, payload, report=None):
+    if 'attribution' in payload:
+        from src.explainability.attribution import validate
+        validate(payload['attribution'], payload, market)
     # The pointer and job success commit together. Readers never see staged data.
     encoded = json.dumps(payload, sort_keys=True, allow_nan=False)
     snapshot_id = hashlib.sha256((market + encoded).encode()).hexdigest()

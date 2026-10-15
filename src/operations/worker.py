@@ -100,6 +100,12 @@ def build(market, directory):
             raise ValidationFailure(f'Final snapshot {key} is not finite.')
     if not 0 <= result['risk_score_10d'] <= 100:
         raise ValidationFailure('Risk score outside 0–100.')
+    from src.explainability.attribution import explain, validate
+    result['attribution'] = explain(model, features.loc[[date], columns], market=market,
+                                    model_sha256=original_model_hash, provenance=spec['provenance'])
+    validate(result['attribution'], result, market)
+    if hashlib.sha256(model_path.read_bytes()).hexdigest() != original_model_hash:
+        raise ValidationFailure('Deployment model changed during attribution; snapshot rejected.')
     # Quantitative alert only; dramatic moves remain valid and are published.
     result['anomalies'] = spec.get('anomalies',[])
     (stage/'snapshot.json').write_text(json.dumps(result,allow_nan=False))

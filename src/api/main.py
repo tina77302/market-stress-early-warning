@@ -414,38 +414,8 @@ def get_shap_drivers():
     not percentage-point changes in event probability.
     """
 
-    path = (
-        DATA_FEATURES_DIR
-        / "shap"
-        / "latest_shap.json"
-    )
-
-    if not path.exists():
-        raise HTTPException(
-            status_code=404,
-            detail=(
-                "Latest SHAP explanation not found. "
-                "Run SHAP analysis first."
-            ),
-        )
-
-    try:
-        with open(path, "r") as f:
-            payload = json.load(f)
-    except Exception as exc:
-        raise HTTPException(
-            status_code=500,
-            detail=f"Failed to load SHAP explanation: {exc}",
-        )
-
-    return {
-        **payload,
-        "interpretation_note": (
-            "Positive SHAP values push the model risk score "
-            "higher and negative values push it lower. "
-            "SHAP values are not probability-point changes."
-        ),
-    }
+    from src.operations.service import current_attribution
+    return current_attribution('us')
 
 # ==================================================
 # KOREA - Configuration
@@ -768,42 +738,9 @@ def get_korea_shap_drivers():
     not percentage-point changes in event probability.
     """
 
-    path = (
-        KOREA_PROCESSED_DIR
-        / "shap"
-        / "latest_shap.json"
-    )
+    from src.operations.service import current_attribution
+    return current_attribution('korea')
 
-    if not path.exists():
-        raise HTTPException(
-            status_code=404,
-            detail=(
-                "Latest Korea SHAP explanation not found. "
-                "Run Korea SHAP analysis first."
-            ),
-        )
-
-    try:
-        with open(path, "r") as f:
-            payload = json.load(f)
-    except Exception as exc:
-        raise HTTPException(
-            status_code=500,
-            detail=(
-                f"Failed to load Korea SHAP explanation: {exc}"
-            ),
-        )
-
-    return {
-        **payload,
-        "interpretation_note": (
-            "Positive SHAP values push the Korea model "
-            "risk score higher and negative values push "
-            "it lower. SHAP values are model-output "
-            "contributions, not probability-point changes."
-        ),
-    }
-    
 # ==================================================
 # KOREA - Historical OOS Data
 # ==================================================

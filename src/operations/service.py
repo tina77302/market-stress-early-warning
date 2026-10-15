@@ -60,8 +60,22 @@ def current_payload(market):
     if not current:
         from fastapi import HTTPException
         raise HTTPException(503,detail={'message':'Current market risk unavailable. No validated snapshot.','data_health':health(market)})
-    payload={key:value for key,value in current['payload'].items() if key!='artifact_directory'}
+    payload={key:value for key,value in current['payload'].items() if key not in ('artifact_directory', 'attribution')}
     payload.setdefault('market_observation_date',payload['last_updated'])
     payload.setdefault('data_retrieved_at',max((s['retrieved_at'] for s in payload.get('input_series',[]) if s.get('retrieved_at')),default=None))
     payload.setdefault('model_inference_at',None)
     return {**payload,'data_health':health(market,current=current)}
+
+
+def current_attribution(market):
+    from fastapi import HTTPException
+    from src.explainability.attribution import validate
+    current = snapshot(market)
+    if not current or 'attribution' not in current['payload']:
+        raise HTTPException(503, detail='No attribution for the validated snapshot. Refresh required.')
+    payload = current['payload']
+    try:
+        validate(payload['attribution'], payload, market)
+    except (ValueError, KeyError, TypeError) as exc:
+        raise HTTPException(503, detail='Snapshot attribution failed consistency validation.') from exc
+    return payload['attribution']
