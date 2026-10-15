@@ -1,5 +1,5 @@
 export type Market = 'us' | 'korea';
-export interface User { id: number; email: string; role: 'user' | 'admin' }
+export interface User { id: number; email: string | null; username?: string | null; role: 'user' | 'admin' }
 export interface Security { market: Market; symbol: string; name: string; currency: string }
 export interface Quote { id: string; market: Market; symbol: string; price: number; currency: string; observed_at: string; source: string; expires_at: number }
 export interface Position { symbol: string; market: Market; quantity: number; average_cost: number; cost_basis: number; latest_price: number | null; market_value: number | null; unrealized_pnl: number | null; return_pct: number | null; price_observed_at: string | null }

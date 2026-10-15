@@ -80,7 +80,7 @@ def users(limit: int = Query(50, ge=1, le=100), offset: int = Query(0, ge=0), us
     with database() as db:
         db.execute('BEGIN')
         total = db.execute('SELECT COUNT(*) FROM users').fetchone()[0]
-        rows = db.execute('SELECT u.id,u.email,u.role,u.created_at,COUNT(p.id) AS portfolio_count FROM users u LEFT JOIN portfolios p ON p.user_id=u.id GROUP BY u.id ORDER BY u.id LIMIT ? OFFSET ?', (limit, offset)).fetchall()
+        rows = db.execute('SELECT u.id,u.email,u.username,u.role,u.created_at,COUNT(p.id) AS portfolio_count FROM users u LEFT JOIN portfolios p ON p.user_id=u.id GROUP BY u.id ORDER BY u.id LIMIT ? OFFSET ?', (limit, offset)).fetchall()
     return {'data': [{**dict(row), 'portfolio_status': 'present' if row['portfolio_count'] else 'none'} for row in rows], 'total': total, 'limit': limit, 'offset': offset}
 
 

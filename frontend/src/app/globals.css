@@ -559,3 +559,9 @@ html[lang="ko"] .font-mono { font-family: ui-monospace, 'MRI Korean', monospace;
 
 .data-health-current { border-left-color: #47e1bf; background: #142c2a; color: #acd6ca; }
 .data-health-current strong { color: #47e1bf; }
+
+/* Keep the model contribution summary stacked at every viewport width. */
+.detail-page .factor-summary { min-width: 0; }
+.detail-page .factor-summary > div { display: block; min-width: 0; width: 100%; }
+.detail-page .factor-summary strong { margin-top: 5px; overflow-wrap: anywhere; }
+.detail-page .factor-summary .factor-influence { margin: 6px 0 0; font-size: 11px; line-height: 1.5; color: #b8cbd9; overflow-wrap: anywhere; }

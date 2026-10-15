@@ -814,5 +814,19 @@
   "freshness_delayed_notice": "Some indicators are awaiting updates.",
   "freshness_stale_notice": "Showing the last validated snapshot. Check the observation date.",
   "freshness_error_notice": "The latest refresh failed. Showing the last validated snapshot.",
-  "freshness_partial_notice": "Some inputs need attention. Showing the last validated snapshot."
+  "freshness_partial_notice": "Some inputs need attention. Showing the last validated snapshot.",
+  "factor_equity": "Equity factors",
+  "factor_volatility": "Volatility factors",
+  "factor_credit": "Credit factors",
+  "factor_model_higher": "Model risk contribution: Higher ↑",
+  "factor_model_lower": "Model risk contribution: Lower ↓",
+  "factor_model_neutral": "Model risk contribution: Neutral",
+  "factor_model_unavailable": "Model contribution unavailable",
+  "factor_main_influence": "Main influence:",
+  "factor_summary_note": "Model contributions from available leading SHAP drivers; not causal effects.",
+  "account_login_identity": "Email or User ID",
+  "account_identity_required": "Enter your email or user ID.",
+  "account_invalid_login": "Invalid email, user ID or password.",
+  "account_role_admin": "Administrator",
+  "account_role_user": "User"
 }

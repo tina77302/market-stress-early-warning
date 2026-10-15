@@ -62,7 +62,7 @@ def current_user(request: Request, response: Response):
     if not token or len(token) > 256:
         raise HTTPException(401, 'Please log in to your paper portfolio.')
     with database() as db:
-        row = db.execute('SELECT u.id,u.email,u.created_at,u.role FROM sessions s JOIN users u ON u.id=s.user_id WHERE s.token_hash=? AND s.expires_at>?', (digest(token), int(time.time()))).fetchone()
+        row = db.execute('SELECT u.id,u.email,u.username,u.created_at,u.role FROM sessions s JOIN users u ON u.id=s.user_id WHERE s.token_hash=? AND s.expires_at>?', (digest(token), int(time.time()))).fetchone()
     if not row:
         raise HTTPException(401, 'Session expired. Please log in again.')
     return dict(row)

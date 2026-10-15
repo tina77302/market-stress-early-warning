@@ -6,7 +6,7 @@ from typing import Literal
 from uuid import UUID, uuid4
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Request, Response
-from pydantic import BaseModel, ConfigDict, Field, field_validator
+from pydantic import AliasChoices, BaseModel, ConfigDict, Field, field_validator
 
 from . import auth, prices
 from .service import execute_order, money, now_iso, portfolio_summary, serialize_order
@@ -28,6 +28,18 @@ class Credentials(BaseModel):
         if not re.fullmatch(r'[^\s@]+@[^\s@]+\.[^\s@]+', value):
             raise ValueError('Enter a valid email address.')
         return value
+
+
+class LoginCredentials(BaseModel):
+    model_config = ConfigDict(extra='forbid')
+    # Preserve the email/password request contract; username is an optional alias.
+    email: str = Field(min_length=3, max_length=254, validation_alias=AliasChoices('email', 'username'))
+    password: str = Field(min_length=10, max_length=128)
+
+    @field_validator('email')
+    @classmethod
+    def identity(cls, value):
+        return value.strip().lower()
 
 
 class Order(BaseModel):
@@ -64,19 +76,19 @@ def register(body: Credentials, request: Request, response: Response):
 
 
 @router.post('/auth/login')
-def login(body: Credentials, request: Request, response: Response):
+def login(body: LoginCredentials, request: Request, response: Response):
     auth.check_origin(request)
     auth.throttle(request, body.email)
     with database() as db:
-        user = db.execute('SELECT * FROM users WHERE email=?', (body.email,)).fetchone()
+        user = db.execute('SELECT * FROM users WHERE email=? OR username=? COLLATE NOCASE', (body.email, body.email)).fetchone()
         # Spend comparable hashing work for unknown users too.
         encoded = user['password_hash'] if user else auth.password_hash('unregistered-user-placeholder')
         valid = auth.password_matches(body.password, encoded)
         if not user or not valid:
-            raise HTTPException(401, 'Invalid email or password.')
+            raise HTTPException(401, 'Invalid email, user ID or password.')
         auth.set_session(db, user['id'], request, response)
         db.commit()
-    return {'user': {'id': user['id'], 'email': user['email'], 'role': user['role']}}
+    return {'user': {'id': user['id'], 'email': user['email'], 'username': user['username'], 'role': user['role']}}
 
 
 @router.get('/auth/me')

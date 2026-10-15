@@ -179,3 +179,80 @@ for(const language of ['en','ko']) {
  } finally {React.useState=useStateBefore;}
 }
 console.log('Freshness/availability: all five freshness states retain valid scores; missing/invalid models unavailable; Overview/U.S./Korea/Compare bilingual rendering passed.');
+
+// Factor cards: available-driver sums determine direction; largest absolute
+// contribution supplies the label, even when its sign differs from the net.
+const MarketDetail=require('../src/app/components/MarketDetail.tsx').default;
+function factorCards(markup) {
+ return [...markup.matchAll(/<div class="driver factor-summary [\s\S]*?<\/div><\/div>/g)].map(match=>match[0]);
+}
+try {
+ for(const market of ['us','korea'])for(const language of ['en','ko']) {
+  const equity=market==='us'?'SPY':'KOSPI200';
+  const volatility=market==='us'?'VIX':'VKOSPI';
+  const driver=(feature,value)=>({feature,shap_value:value});
+  const fixtures=[
+   driver(`${equity}_1D_Return`,3),driver(`${equity}_5D_Return`,3),driver(`${equity}_60D_Vol`,-5),
+   driver(`${volatility}_Level`,-1),driver(`${volatility}_252D_ZScore`,-2),
+   driver('Credit_Level',2),driver('Credit_5D_Change',-2),
+  ];
+  marketData.useMarket=()=>({latest:market==='us'?delayedFixture:koreaFixture,history:[],shap:{date:'2026-10-13',feature_count:17,top_drivers:fixtures},loading:false,errors:[],retry:()=>{}});
+  const markup=render(language,MarketDetail,{market});
+  const cards=factorCards(markup);
+  assert.equal(cards.length,3);
+  for(const [index,label] of (language==='ko'?['주식 요인','변동성 요인','신용 요인']:['Equity factors','Volatility factors','Credit factors']).entries())assert.ok(cards[index].includes(label));
+  const directions=language==='ko'?['현재 모델 위험 확대 ↑','현재 모델 위험 완화 ↓','현재 모델 위험 기여 중립']:['Model risk contribution: Higher ↑','Model risk contribution: Lower ↓','Model risk contribution: Neutral'];
+  for(const [index,direction] of directions.entries())assert.ok(cards[index].includes(direction));
+  for(const [index,feature] of [`${equity} 60D Vol`,`${volatility} 252D ZScore`,'Credit Level'].entries()) {
+   assert.ok(cards[index].includes(translateText(language,feature)),feature);
+   assert.ok(cards[index].includes(language==='ko'?'주요 영향:':'Main influence:'));
+  }
+  assert.ok(markup.includes(language==='ko'?'인과관계를 뜻하지 않습니다':'not causal effects'));
+  assert.ok(markup.includes('shap-grid'),'Detailed SHAP evidence remains');
+  // Reverse every nonzero category to check the opposite directions too.
+  fixtures.forEach(d=>{d.shap_value=-d.shap_value;});
+  const reversed=factorCards(render(language,MarketDetail,{market}));
+  assert.ok(reversed[0].includes(directions[1]));
+  assert.ok(reversed[1].includes(directions[0]));
+  // A missing category has no invented representative or direction.
+  fixtures.splice(0,fixtures.length,driver(`${equity}_20D_Momentum`,0));
+  const missing=factorCards(render(language,MarketDetail,{market}));
+  assert.ok(missing[0].includes(directions[2]));
+  for(const card of missing.slice(1)) {
+   assert.ok(card.includes(language==='ko'?'모델 기여도 조회 불가':'Model contribution unavailable'));
+   assert.ok(!card.includes(language==='ko'?'주요 영향:':'Main influence:'));
+  }
+ }
+} finally {marketData.useMarket=originalUseMarket;}
+console.log('U.S./Korea factor cards: bilingual labels, mixed-sign sums, strongest absolute driver, ties, neutral, unavailable and detailed SHAP rendering passed.');
+
+// Username login preserves email signup and displays persisted roles explicitly.
+for(const language of ['en','ko']) {
+ const loginMarkup=render(language,Account,{onAuthenticated:()=>{}});
+ assert.ok(loginMarkup.includes(language==='ko'?'이메일 또는 사용자 ID':'Email or User ID'));
+ assert.match(loginMarkup, /<input(?=[^>]*name="email")(?=[^>]*type="text")[^>]*>/);
+ assert.ok(!loginMarkup.includes('<select'));
+ React.useState=initial=>initial==='login'?['register',()=>{}]:useStateBefore(initial);
+ try {
+  const signup=render(language,Account,{onAuthenticated:()=>{}});
+  assert.match(signup,/<input(?=[^>]*name="email")(?=[^>]*type="email")[^>]*>/);
+  assert.ok(!signup.includes(language==='ko'?'이메일 또는 사용자 ID':'Email or User ID'));
+  assert.ok(!signup.includes('<select'));
+ } finally {React.useState=useStateBefore;}
+ const Menu=require('../src/app/components/AccountMenu.tsx').default;
+ for(const role of ['admin','user']) {
+  const fixture={id:role==='admin'?1:2,email:null,username:role==='admin'?'admin1':'user1',role};
+  let injected=false;
+  React.useState=initial=>{
+   if(initial===null&&!injected){injected=true;return [fixture,()=>{}];}
+   return useStateBefore(initial);
+  };
+  try {
+   const menu=render(language,Menu);
+   assert.ok(menu.includes(fixture.username), menu);
+   assert.ok(menu.includes(language==='ko'?(role==='admin'?'관리자':'일반 사용자'):(role==='admin'?'Administrator':'User')));
+   assert.equal(menu.includes('href="/admin"'),role==='admin');
+  } finally {React.useState=useStateBefore;}
+ }
+}
+console.log('Account identity: bilingual username/email login, email signup, persisted-role labels and admin-only navigation passed.');
