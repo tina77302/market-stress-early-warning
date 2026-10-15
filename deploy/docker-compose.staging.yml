@@ -17,7 +17,7 @@ services:
       MARKET_MODELS_ROOT: /app/models
       MARKET_OPERATIONS_DIR: /app/data/operations
       PAPER_DB_PATH: /app/data/paper/workspace.sqlite3
-      MARKET_REFRESH_ENABLED: 'false'
+      MARKET_REFRESH_ENABLED: ${MARKET_REFRESH_ENABLED:-false}
       PAPER_SESSION_SECRET: ${PAPER_SESSION_SECRET:?Set a stable session secret outside the repository}
       PAPER_ALLOWED_ORIGINS: ${PAPER_ALLOWED_ORIGINS:?Set the exact HTTPS site origin}
       PAPER_COOKIE_SECURE: 'true'
