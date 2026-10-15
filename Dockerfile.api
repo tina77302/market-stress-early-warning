@@ -11,6 +11,8 @@ COPY src/api ./src/api
 COPY src/admin ./src/admin
 COPY src/paper ./src/paper
 COPY src/operations ./src/operations
+COPY src/explainability/__init__.py src/explainability/attribution.py ./src/explainability/
+RUN python -c "from src.explainability.attribution import explain, validate"
 COPY src/features ./src/features
 COPY src/data ./src/data
 COPY src/korea ./src/korea
