@@ -16,8 +16,8 @@ def provision_username_account(username, password, *, role='user'):
         raise ValueError('User ID must be 3–40 ASCII letters, digits, dots, underscores or hyphens; start with a letter or digit.')
     if role not in ('admin', 'user'):
         raise ValueError('Invalid persisted role.')
-    if password is None or not 14 <= len(password) <= 128:
-        raise ValueError('Use a password of 14–128 characters.')
+    if password is None or not 8 <= len(password) <= 128:
+        raise ValueError('Use a password of 8–128 characters.')
     with database() as db:
         db.execute('BEGIN IMMEDIATE')
         if db.execute('SELECT id FROM users WHERE username=? COLLATE NOCASE', (username,)).fetchone():

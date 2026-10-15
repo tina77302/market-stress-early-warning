@@ -587,7 +587,7 @@
   "unrealized_p_l_73c67e": "평가손익",
   "unsupported_symbol_for_this_market_715415": "해당 시장에서 지원하지 않는 종목 코드입니다.",
   "untrusted_request_origin_37c6c6": "허용되지 않은 요청 출처입니다.",
-  "use_at_least_10_characters_no_real_money_or_brokerage_connection_e913db": "비밀번호는 10자 이상으로 입력해 주세요. 실제 자금이나 증권사 계좌는 사용하지 않습니다.",
+  "account_password_hint": "비밀번호는 8자 이상으로 입력해 주세요. 실제 자금이나 증권사 계좌는 사용하지 않습니다.",
   "user_9f8a23": "일반 사용자",
   "user_id_23bf49": "사용자 ID",
   "vix_5fa343": "VIX",

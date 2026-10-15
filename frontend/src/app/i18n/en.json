@@ -587,7 +587,7 @@
   "unrealized_p_l_73c67e": "Unrealized P&L",
   "unsupported_symbol_for_this_market_715415": "Unsupported symbol for this market.",
   "untrusted_request_origin_37c6c6": "Untrusted request origin.",
-  "use_at_least_10_characters_no_real_money_or_brokerage_connection_e913db": "Use at least 10 characters. No real money or brokerage connection.",
+  "account_password_hint": "Use at least 8 characters. No real money or brokerage connection.",
   "user_9f8a23": "User",
   "user_id_23bf49": "User ID",
   "vix_5fa343": "VIX",

@@ -15,7 +15,7 @@ for (const key of Object.keys(en)) {
 }
 for (const [source, translation] of [['Overview','종합 현황'],['Paper Trading','모의투자'],['BUY','매수'],['SELL','매도'],['Unrealized P&L','평가손익'],['Insufficient virtual cash.','가상 현금이 부족합니다.']]) assert.equal(translateText('ko',source),translation);
 for (const symbol of ['SPY','VIX','KOSPI 200','VKOSPI','XGBoost','Logistic Regression','ROC-AUC','PR-AUC','Target₁₀D(t) = 1']) assert.equal(translateText('ko',symbol),symbol);
-assert.ok(translateText('ko','String should have at least 10 characters').includes('10'));
+assert.ok(translateText('ko','String should have at least 8 characters').includes('8'));
 assert.ok(translateText('ko','U.S. is LOW with a model score of 13.2 / 100. Current MSI is 0.123.').includes('13.2 / 100'));
 assert.equal(translateText('en','Insufficient virtual cash.'),'Insufficient virtual cash.');
 function check(dir) {
@@ -230,11 +230,14 @@ console.log('U.S./Korea factor cards: bilingual labels, mixed-sign sums, stronge
 for(const language of ['en','ko']) {
  const loginMarkup=render(language,Account,{onAuthenticated:()=>{}});
  assert.ok(loginMarkup.includes(language==='ko'?'이메일 또는 사용자 ID':'Email or User ID'));
+ assert.match(loginMarkup, /minLength="8"/);
+ assert.ok(loginMarkup.includes(language==='ko'?'비밀번호는 8자 이상':'Use at least 8 characters.'));
  assert.match(loginMarkup, /<input(?=[^>]*name="email")(?=[^>]*type="text")[^>]*>/);
  assert.ok(!loginMarkup.includes('<select'));
  React.useState=initial=>initial==='login'?['register',()=>{}]:useStateBefore(initial);
  try {
   const signup=render(language,Account,{onAuthenticated:()=>{}});
+  assert.match(signup,/minLength="8"/);
   assert.match(signup,/<input(?=[^>]*name="email")(?=[^>]*type="email")[^>]*>/);
   assert.ok(!signup.includes(language==='ko'?'이메일 또는 사용자 ID':'Email or User ID'));
   assert.ok(!signup.includes('<select'));

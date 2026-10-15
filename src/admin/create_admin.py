@@ -42,7 +42,7 @@ def main(argv=None, *, role='admin'):
         else:
             with warnings.catch_warnings():
                 warnings.simplefilter('error', getpass.GetPassWarning)
-                password = getpass.getpass('Password (14–128 characters): ')
+                password = getpass.getpass('Password (8–128 characters): ')
                 confirmed = getpass.getpass('Confirm password: ')
             if password != confirmed:
                 print('Passwords do not match. No account changed.', file=sys.stderr)

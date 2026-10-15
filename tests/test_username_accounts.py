@@ -252,3 +252,40 @@ def test_migration_failure_rolls_back_legacy_users(accounts, monkeypatch, tmp_pa
         assert 'username' not in columns and columns['email'][3] == 1
         assert db.execute('SELECT id,email,password_hash FROM users').fetchone() == (42,'legacy@example.invalid','fixture-hash')
         assert db.execute('SELECT user_id FROM portfolios').fetchone()[0] == 999
+
+
+@pytest.mark.parametrize('length', [7, 8, 128, 129])
+@pytest.mark.parametrize('command,flag,identity,role', [
+    (admin_cli, '--username', 'admin1', 'admin'),
+    (user_cli, '--username', 'user1', 'user'),
+    (admin_cli, '--email', 'admin1@example.invalid', 'admin'),
+])
+def test_password_length_cli_and_login(accounts, command, flag, identity, role, length, capsys, caplog):
+    password = secrets.token_urlsafe(128)[:length]
+    valid = 8 <= length <= 128
+    with patch('src.admin.create_admin.sys.stdin.isatty', return_value=True), patch('src.admin.create_admin.getpass.getpass', side_effect=[password,password]) as prompt:
+        assert command([flag, identity]) == (0 if valid else 1)
+        assert prompt.call_args_list[0].args[0] == 'Password (8–128 characters): '
+        assert prompt.call_count == 2
+    with database() as db:
+        rows = db.execute('SELECT * FROM users').fetchall()
+        assert len(rows) == int(valid)
+        if valid:
+            assert rows[0]['role'] == role
+            assert auth.password_matches(password, rows[0]['password_hash'])
+            assert password not in rows[0]['password_hash']
+    if valid:
+        client, _ = logged_in(accounts[0], identity, password, field='email' if flag=='--email' else 'username')
+        assert client.get('/api/auth/me').json()['user']['role'] == role
+    captured = capsys.readouterr()
+    assert password not in captured.out+captured.err+caplog.text
+
+
+@pytest.mark.parametrize('length', [7, 8, 128, 129])
+def test_email_signup_password_length(accounts, length):
+    password = secrets.token_urlsafe(128)[:length]
+    body = {'email':'length@example.invalid','password':password}
+    client = TestClient(accounts[0])
+    valid = 8 <= length <= 128
+    assert client.post('/api/auth/register', json=body).status_code == (201 if valid else 422)
+    assert client.post('/api/auth/login', json=body).status_code == (200 if valid else 422)

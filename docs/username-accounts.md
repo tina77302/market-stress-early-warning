@@ -15,7 +15,7 @@ sudo docker compose --env-file /etc/market-stress/staging.env \
 
 Do not use `exec -T`, pipes, password arguments, or password environment variables.
 Each command requires a terminal and asks for a hidden password twice. Use
-14–128 characters. The commands never print the password. If hidden input is
+8–128 characters. The commands never print the password. If hidden input is
 unavailable, confirmation fails, or the user ID already exists, creation fails
 without replacing a password, changing a role, or resetting a portfolio.
 

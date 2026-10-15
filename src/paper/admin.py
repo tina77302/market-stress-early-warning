@@ -37,8 +37,8 @@ def provision_admin(email, password, promote_existing=False):
     email = email.strip().lower()
     if not (3 <= len(email) <= 254 and re.fullmatch(r'[^\s@]+@[^\s@]+\.[^\s@]+', email)):
         raise RuntimeError('Invalid admin email configuration.')
-    if password is not None and not 14 <= len(password) <= 128:
-        raise RuntimeError('Invalid admin password configuration: use 14–128 characters.')
+    if password is not None and not 8 <= len(password) <= 128:
+        raise RuntimeError('Invalid admin password configuration: use 8–128 characters.')
     with database() as db:
         db.execute('BEGIN IMMEDIATE')
         existing = db.execute('SELECT id,role FROM users WHERE email=?', (email,)).fetchone()

@@ -15,7 +15,7 @@ From the repository root, create each administrator individually:
 .venv/bin/python -m src.admin.create_admin --email "<admin2-email>"
 ```
 
-Replace the email placeholders. Each command securely prompts for and confirms that account's password (14–128 characters). Passwords are not echoed, accepted as command arguments, written to files, or printed in logs. Omit `--email` to prompt for the email too. Run in an interactive terminal; piped input and insecure getpass fallback are refused. The command loads the ignored root `.env` to locate the same database as the backend. `PAPER_SESSION_SECRET` must remain configured for normal login.
+Replace the email placeholders. Each command securely prompts for and confirms that account's password (8–128 characters). Passwords are not echoed, accepted as command arguments, written to files, or printed in logs. Omit `--email` to prompt for the email too. Run in an interactive terminal; piped input and insecure getpass fallback are refused. The command loads the ignored root `.env` to locate the same database as the backend. `PAPER_SESSION_SECRET` must remain configured for normal login.
 
 Log in through `/paper-trading`; each administrator gets **Account → Admin console**. No backend restart is required after command-based creation. Re-running for an existing admin leaves its password, role, portfolios and history unchanged. Adding a second administrator never overwrites the first.
 

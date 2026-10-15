@@ -19,7 +19,7 @@ Market = Literal['us', 'korea']
 class Credentials(BaseModel):
     model_config = ConfigDict(extra='forbid')
     email: str = Field(min_length=3, max_length=254)
-    password: str = Field(min_length=10, max_length=128)
+    password: str = Field(min_length=8, max_length=128)
 
     @field_validator('email')
     @classmethod
@@ -34,7 +34,7 @@ class LoginCredentials(BaseModel):
     model_config = ConfigDict(extra='forbid')
     # Preserve the email/password request contract; username is an optional alias.
     email: str = Field(min_length=3, max_length=254, validation_alias=AliasChoices('email', 'username'))
-    password: str = Field(min_length=10, max_length=128)
+    password: str = Field(min_length=8, max_length=128)
 
     @field_validator('email')
     @classmethod
