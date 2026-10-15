@@ -1,3 +1,4 @@
+import json
 import os
 import re
 import sqlite3
@@ -10,7 +11,7 @@ from pydantic import AliasChoices, BaseModel, ConfigDict, Field, field_validator
 
 from . import auth, prices
 from .service import execute_order, money, now_iso, portfolio_summary, serialize_order
-from .store import database, starting_cash
+from .store import database
 
 router = APIRouter(prefix='/api', tags=['Simulated workspace'])
 Market = Literal['us', 'korea']
@@ -50,6 +51,9 @@ class Order(BaseModel):
     quantity: int = Field(strict=True, gt=0, le=1000000)
     quote_id: UUID
     request_key: UUID
+    fx_usd_cents: int | None = Field(default=None, strict=True, ge=0)
+    settlement_id: UUID | None = None
+    fx_krw: int | None = Field(default=None, strict=True, ge=0)
 
 
 @router.post('/auth/register', status_code=201)
@@ -66,10 +70,8 @@ def register(body: Credentials, request: Request, response: Response):
             raise HTTPException(409, 'An account with this email already exists.')
         user_id = cursor.lastrowid
         created = now_iso()
-        for market, currency in [('us', 'USD'), ('korea', 'KRW')]:
-            cash = starting_cash(market)
-            portfolio = db.execute('INSERT INTO portfolios (user_id,market,currency,starting_cash,cash,created_at) VALUES (?,?,?,?,?,?)', (user_id, market, currency, cash, cash, created))
-            db.execute('INSERT INTO snapshots (portfolio_id,observed_at,value,cash) VALUES (?,?,?,?)', (portfolio.lastrowid, created, cash, cash))
+        from .accounts import initialize_portfolio
+        initialize_portfolio(db,user_id,created)
         auth.set_session(db, user_id, request, response)
         db.commit()
     return {'user': {'id': user_id, 'email': body.email, 'role': 'user'}, 'simulated': True}
@@ -115,16 +117,27 @@ def securities(market: Market, q: str = Query('', max_length=100), limit: int = 
 @router.get('/paper/quote')
 def quote(market: Market, symbol: str = Query(max_length=16), user=Depends(auth.current_user)):
     symbol = symbol.strip().upper()
-    symbol = prices.security(market, symbol)['symbol']
+    item = prices.security(market,symbol)
+    symbol = item['symbol']
     price = prices.fetch_price(market, symbol)
     prices.ensure_fresh(price)
     quote_id = str(uuid4())
     expires = int(time.time()) + 120
+    fx_row=None
+    try:
+        from . import fx
+        fx_row=fx.latest()
+    except HTTPException:
+        pass
     with database() as db:
         db.execute('DELETE FROM quotes WHERE expires_at<?', (int(time.time()) - 86400,))
         db.execute('INSERT INTO quotes VALUES (?,?,?,?,?,?,?,?,?,?)', (quote_id, user['id'], market, symbol, price.minor, price.previous_minor, price.observed_at, price.fetched_at, expires, price.source))
+        from .costs import snapshot
+        snapshot(db,quote_id,item)
+        if fx_row:
+            db.execute('INSERT INTO paper_quote_fx VALUES (?,?)',(quote_id,fx_row['id']))
         db.commit()
-    return {'id': quote_id, 'market': market, 'symbol': symbol, 'price': money(price.minor, market), 'currency': 'USD' if market == 'us' else 'KRW', 'observed_at': price.observed_at, 'source': price.source, 'expires_at': expires, 'price_kind': 'completed_daily_close', 'simulated': True}
+    return {'fx':fx.public(fx_row) if fx_row else None,'id': quote_id, 'market': market, 'symbol': symbol, 'price': money(price.minor, market), 'currency': 'USD' if market == 'us' else 'KRW', 'observed_at': price.observed_at, 'source': price.source, 'expires_at': expires, 'price_kind': 'completed_daily_close', 'simulated': True}
 
 
 @router.get('/paper/portfolio')
@@ -143,8 +156,8 @@ def positions(market: Market, response: Response, user=Depends(auth.current_user
 def orders(market: Market, response: Response, user=Depends(auth.current_user)):
     response.headers['Cache-Control'] = 'no-store'
     with database() as db:
-        rows = db.execute('SELECT * FROM orders WHERE user_id=? AND market=? ORDER BY id DESC LIMIT 200', (user['id'], market)).fetchall()
-    return {'data': [serialize_order(row) for row in rows]}
+        rows = db.execute('SELECT o.*,c.detail_json FROM orders o LEFT JOIN paper_order_costs c ON c.order_id=o.id WHERE o.user_id=? AND o.market=? ORDER BY o.id DESC LIMIT 200', (user['id'], market)).fetchall()
+    return {'data': [serialize_order(row,json.loads(row['detail_json']) if row['detail_json'] else None) for row in rows]}
 
 
 @router.post('/paper/orders', status_code=201)
@@ -159,3 +172,36 @@ def performance(market: Market, response: Response, user=Depends(auth.current_us
     with database() as db:
         rows = db.execute('SELECT s.observed_at,s.value,s.cash FROM snapshots s JOIN portfolios p ON p.id=s.portfolio_id WHERE p.user_id=? AND p.market=? ORDER BY s.observed_at DESC LIMIT 500', (user['id'], market)).fetchall()
     return {'data': [{'observed_at': row['observed_at'], 'value': money(row['value'], market), 'cash': money(row['cash'], market)} for row in reversed(rows)], 'currency': 'USD' if market == 'us' else 'KRW', 'note': 'Actual recorded valuations since account creation; no backfilled performance.'}
+
+
+@router.get('/paper/investment')
+def investment_summary(response:Response,user=Depends(auth.current_user)):
+    response.headers['Cache-Control']='no-store'
+    from .investment import summary
+    return summary(user['id'])
+
+
+@router.get('/paper/settlement')
+def settlement(quote_id:UUID,side:Literal['BUY','SELL'],quantity:int=Query(ge=1,le=1000000),user=Depends(auth.current_user)):
+    from .investment import preview
+    return preview(user['id'],str(quote_id),side,quantity)
+
+
+@router.get('/paper/fx-ledger')
+def fx_ledger(user=Depends(auth.current_user)):
+    with database() as db:
+        rows=db.execute('SELECT l.*,r.rate,r.source,r.observation_date,r.retrieved_at FROM paper_fx_ledger l JOIN paper_fx_rates r ON r.id=l.rate_id WHERE l.user_id=? ORDER BY l.order_id DESC LIMIT 200',(user['id'],)).fetchall()
+        return {'data':[dict(row) for row in rows]}
+
+
+@router.get('/paper/fx')
+def latest_fx(user=Depends(auth.current_user)):
+    from . import fx
+    return {'fx':fx.public(fx.latest())}
+
+
+@router.get('/paper/stress-analytics')
+def stress_analytics(response: Response, user=Depends(auth.current_user)):
+    response.headers['Cache-Control'] = 'no-store'
+    from .stress_analytics import current_report
+    return current_report(user['id'])

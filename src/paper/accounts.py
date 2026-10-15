@@ -3,7 +3,7 @@ import re
 
 from .auth import password_hash
 from .service import now_iso
-from .store import database, starting_cash
+from .store import database
 
 
 class AccountExistsError(ValueError):
@@ -25,13 +25,17 @@ def provision_username_account(username, password, *, role='user'):
         created = now_iso()
         user = db.execute('INSERT INTO users (username,email,password_hash,created_at,role) VALUES (?,NULL,?,?,?)',
                           (username, password_hash(password), created, role))
-        for market, currency in [('us', 'USD'), ('korea', 'KRW')]:
-            cash = starting_cash(market)
-            portfolio = db.execute('INSERT INTO portfolios (user_id,market,currency,starting_cash,cash,created_at) VALUES (?,?,?,?,?,?)',
-                                   (user.lastrowid, market, currency, cash, cash, created))
-            db.execute('INSERT INTO snapshots (portfolio_id,observed_at,value,cash) VALUES (?,?,?,?)', (portfolio.lastrowid, created, cash, cash))
+        initialize_portfolio(db,user.lastrowid,created)
         if role == 'admin':
             from .admin import record_admin_activity
             record_admin_activity(db, user.lastrowid, 'admin.bootstrap_created', user.lastrowid)
         db.commit()
     return 'created'
+
+
+def initialize_portfolio(db,user_id,created):
+    db.execute('INSERT INTO investment_accounts VALUES (?,?,?)',(user_id,10000000,created))
+    for market,currency,cash in [('us','USD',10000000),('korea','KRW',0)]:
+        leg=db.execute('INSERT INTO portfolios (user_id,market,currency,starting_cash,cash,created_at) VALUES (?,?,?,?,?,?)',(user_id,market,currency,cash,cash,created))
+        db.execute('INSERT INTO snapshots (portfolio_id,observed_at,value,cash) VALUES (?,?,?,?)',(leg.lastrowid,created,cash,cash))
+    db.execute('INSERT INTO investment_snapshots (user_id,observed_at,value_cents,cash_cents) VALUES (?,?,?,?)',(user_id,created,10000000,10000000))

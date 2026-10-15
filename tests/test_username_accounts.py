@@ -119,9 +119,11 @@ def test_admin_user_portfolio_order_pnl_and_history_isolation(accounts, market, 
     def quote(client):
         return client.get('/api/paper/quote', params={'market':market,'symbol':symbol}).json()['id']
     def order(client, csrf, side, quote_id=None, **extra):
-        return client.post('/api/paper/orders', json={'market':market,'symbol':symbol,'side':side,'quantity':1,
-                           'quote_id':quote_id or quote(client),'request_key':str(uuid4()), **extra},
-                           headers={'x-csrf-token':csrf})
+        selected=quote_id or quote(client)
+        body={'market':market,'symbol':symbol,'side':side,'quantity':1,'quote_id':selected,'request_key':str(uuid4()),**extra}
+        plan=client.get('/api/paper/settlement',params={'quote_id':selected,'side':side,'quantity':1})
+        if plan.status_code==200:body.update({k:plan.json()[k] for k in ['fx_usd_cents','fx_krw','settlement_id']})
+        return client.post('/api/paper/orders',json=body,headers={'x-csrf-token':csrf})
     assert order(admin, admin_csrf, 'BUY').status_code == 201
     marks[market] *= 2
     assert summary(admin)['unrealized_pnl'] > 0

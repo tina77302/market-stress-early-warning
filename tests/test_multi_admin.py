@@ -62,6 +62,8 @@ def test_delete_an_admin_when_another_remains(environment):
     with database() as db:
         # Clear owned empty portfolios only in this isolated fixture; no deletion API exists.
         db.execute('DELETE FROM snapshots WHERE portfolio_id IN (SELECT id FROM portfolios WHERE user_id=1)')
+        db.execute('DELETE FROM investment_snapshots WHERE user_id=1')
+        db.execute('DELETE FROM investment_accounts WHERE user_id=1')
         db.execute('DELETE FROM portfolios WHERE user_id=1')
         db.execute('DELETE FROM users WHERE id=1');db.commit()
         assert db.execute('SELECT COUNT(*) FROM admin_activity').fetchone()[0]==2

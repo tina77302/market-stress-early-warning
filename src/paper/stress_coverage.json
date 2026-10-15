@@ -1,0 +1,20 @@
+{
+  "schema_version": 1,
+  "reviewed_at": "2026-10-15T07:25:00+00:00",
+  "review_status": "source_documents_reviewed",
+  "usage_scope": "local_noncommercial_research_demo",
+  "public_display_rights": "not_confirmed",
+  "notes": "Current Yahoo sector/industry labels, not historical GICS membership. Issuer fund mandates are reviewed proxies; Technology is the reviewed display alias of Information Technology. No classifications inferred from names.",
+  "markets": {
+    "us": [
+      {"symbol":"NVDA","kind":"security","sector":"Technology","industry":"Semiconductors","sector_proxy":"XLK","source":"https://finance.yahoo.com/quote/NVDA/profile/","classification_basis":"provider_reported_sector_and_industry","review_sources":["https://finance.yahoo.com/quote/NVDA/","https://www.ssga.com/us/en/individual/etfs/state-street-technology-select-sector-spdr-etf-xlk"],"known_action":{"column":"Stock Splits","date":"2024-06-10","value":10,"source":"https://investor.nvidia.com/files/doc_downloads/2024/05/NVIDIA-2024-Stock-Split-FAQ.pdf"}},
+      {"symbol":"XLK","kind":"sector","sector":"Technology","source":"https://www.ssga.com/us/en/individual/etfs/state-street-technology-select-sector-spdr-etf-xlk","classification_basis":"issuer_reviewed_sector_benchmark","benchmark":"Technology Select Sector Index","issuer_sector_label":"Information Technology","review_sources":["https://www.ssga.com/us/en/individual/etfs/state-street-technology-select-sector-spdr-etf-xlk"]},
+      {"symbol":"SOXX","kind":"industry","sector":"Technology","industry":"Semiconductors","source":"https://www.ishares.com/us/products/239705/ishares-phlx-semiconductor-etf?qt=SOXX","classification_basis":"issuer_reviewed_industry_benchmark","benchmark":"NYSE Semiconductor Index","review_sources":["https://www.ishares.com/us/products/239705/ishares-phlx-semiconductor-etf?qt=SOXX"]}
+    ],
+    "korea": [
+      {"symbol":"000660.KS","kind":"security","sector":"Technology","industry":"Semiconductors","sector_proxy":"266370.KS","source":"https://finance.yahoo.com/quote/000660.KS/profile/","classification_basis":"provider_reported_sector_and_industry","review_sources":["https://finance.yahoo.com/quote/000660.KS/","https://m.samsungfund.com/sheet/20220607/2ETF82_20220531.pdf"]},
+      {"symbol":"266370.KS","kind":"sector","sector":"Technology","source":"https://m.samsungfund.com/sheet/20220607/2ETF82_20220531.pdf","classification_basis":"issuer_reviewed_sector_benchmark","benchmark":"KRX Information Technology Index","issuer_sector_label":"정보기술","mandate_document_as_of":"2022-05-31","review_sources":["https://m.samsungfund.com/sheet/20220607/2ETF82_20220531.pdf"],"known_action":{"column":"Dividends","date":"2022-04-28","value":140,"issuer_record_date":"2022-04-29","source":"https://m.samsungfund.com/sheet/20220607/2ETF82_20220531.pdf"}},
+      {"symbol":"091160.KS","kind":"industry","sector":"Technology","industry":"Semiconductors","source":"https://m.samsungfund.com/sheet/20211213/2ETF07_20211130.pdf","classification_basis":"issuer_reviewed_industry_benchmark","benchmark":"KRX Semiconductors Index","mandate_document_as_of":"2021-11-30","review_sources":["https://m.samsungfund.com/sheet/20211213/2ETF07_20211130.pdf","https://m.samsungfund.com/etf/product/view.do?id=2ETF07"]}
+    ]
+  }
+}

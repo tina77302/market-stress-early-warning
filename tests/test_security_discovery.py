@@ -137,7 +137,7 @@ def test_missing_directory_fails_closed(tmp_path,monkeypatch):
 
 
 @pytest.fixture
-def clients(tmp_path,monkeypatch):
+def clients(tmp_path,monkeypatch, zero_cost_policy):
     monkeypatch.setenv('PAPER_DB_PATH',str(tmp_path/'accounts.sqlite3'))
     monkeypatch.setenv('PAPER_SESSION_SECRET',secrets.token_urlsafe(48))
     monkeypatch.setenv('PAPER_ALLOWED_ORIGINS','http://testserver')
@@ -196,13 +196,18 @@ def test_quote_provider_validation(clients,monkeypatch,failure):
 
 @pytest.mark.parametrize('market,input_symbol,stored', [('us','NVDA','NVDA'),('korea','035420','035420.KS'),('korea','035900','035900.KQ')])
 def test_generalized_orders_accounting_and_isolation(clients,monkeypatch,market,input_symbol,stored):
+    with database() as db:
+        db.execute("UPDATE portfolios SET cash=10000000 WHERE market='korea'");db.commit()
     price=10000 if market=='us' else 50000
     def provider(m,s):return prices.Price(price,None,(datetime.now(timezone.utc)-timedelta(days=1)).isoformat(),int(time.time()))
     monkeypatch.setattr(prices,'fetch_price',provider)
     admin,csrf=clients[1][0];other,other_csrf=clients[1][1]
     def quote(c=admin):return c.get('/api/paper/quote',params={'market':market,'symbol':input_symbol}).json()['id']
     def order(side,quantity,c=admin,token=csrf,quote_id=None):
-        return c.post('/api/paper/orders',json={'market':market,'symbol':input_symbol,'side':side,'quantity':quantity,'quote_id':quote_id or quote(c),'request_key':str(uuid4())},headers={'x-csrf-token':token})
+        selected=quote_id or quote(c)
+        plan=c.get('/api/paper/settlement',params={'quote_id':selected,'side':side,'quantity':quantity})
+        fields={key:plan.json()[key] for key in ['settlement_id','fx_usd_cents','fx_krw']} if plan.status_code==200 else {}
+        return c.post('/api/paper/orders',json={'market':market,'symbol':input_symbol,'side':side,'quantity':quantity,'quote_id':selected,'request_key':str(uuid4()),**fields},headers={'x-csrf-token':token})
     def summary(c):return c.get('/api/paper/portfolio',params={'market':market}).json()
     initial=summary(admin)['cash']
     assert order('BUY',2).status_code==201
@@ -287,3 +292,35 @@ def test_yahoo_name_lookup_is_bounded_filtered_and_cached(monkeypatch):
     assert provider.call_args.kwargs['recommended']==0
     provider.side_effect=TimeoutError('fixture')
     assert YAHOO_LOOKUP('offline failed lookup fixture')==[]
+
+
+@pytest.mark.parametrize('query,market,symbol', [
+    ('AAPL','us','AAPL'),('QQQ','us','QQQ'),('PLTR','us','PLTR'),
+    ('005930','korea','005930.KS'),('삼성전자','korea','005930.KS'),
+    ('000660','korea','000660.KS'),
+])
+def test_unified_client_search_endpoints_preserve_role_parity(clients,query,market,symbol):
+    """The unified picker composes these unchanged per-market API contracts."""
+    results=[]
+    for client,_ in clients[1]:
+        combined=[]
+        for book in ['us','korea']:
+            response=client.get('/api/paper/securities',params={'market':book,'q':query,'limit':30})
+            assert response.status_code==200
+            combined.extend(response.json()['data'])
+        results.append(combined)
+    assert results[0]==results[1]
+    assert any(row['market']==market and row['symbol']==symbol for row in results[0])
+
+
+def test_us_quote_cannot_settle_against_korea_book(clients,monkeypatch):
+    client,csrf=clients[1][1]
+    monkeypatch.setattr(prices,'fetch_price',lambda market,symbol:prices.Price(10025,None,(datetime.now(timezone.utc)-timedelta(days=1)).isoformat(),int(time.time())))
+    before={market:client.get('/api/paper/portfolio',params={'market':market}).json() for market in ['us','korea']}
+    quote=client.get('/api/paper/quote',params={'market':'us','symbol':'QQQ'})
+    assert quote.status_code==200
+    response=client.post('/api/paper/orders',json={'market':'korea','symbol':'005930.KS','side':'BUY','quantity':5,'quote_id':quote.json()['id'],'request_key':str(uuid4())},headers={'x-csrf-token':csrf})
+    assert response.status_code==409
+    for market in ['us','korea']:
+        after=client.get('/api/paper/portfolio',params={'market':market}).json()
+        assert after['cash']==before[market]['cash'] and after['positions']==before[market]['positions']

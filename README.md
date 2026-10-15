@@ -1,739 +1,249 @@
-# U.S. Financial Market Stress Early Warning System
+# Financial Market Stress Early Warning & Portfolio Risk Analytics
 
-> **AI-based early-warning system for broad U.S. financial-market stress using equity, volatility, and credit-market information.**
+A non-commercial research and portfolio/demo application for monitoring broad financial-market stress in the **U.S. and Korea**, then examining how a user's actual simulated portfolio is exposed to historically similar environments.
 
-## Research Question
+**Market Stress Early Warning is the core product.** Paper Trading, FX and portfolio analytics connect market conditions to portfolio exposure and recorded outcomes. The system does not predict individual stock prices, provide stock recommendations, or promise future returns.
 
-**Can currently observable financial-market information provide an early warning of a U.S. financial-market Stress Event occurring within the next 10 trading days?**
+```text
+Independent U.S. / Korea Market Stress
+    → Sector / Industry Stress
+    → My Portfolio Exposure
+    → Historical Stress Sensitivity
+    → Historical conditional 10D Outlook
+```
 
-This is **not a stock-price forecasting or market-timing model**.
+## Independent market-stress systems
 
-The objective is to estimate whether broad U.S. financial-market stress risk is becoming elevated using only information available at each point in time.
+| | U.S. | Korea |
+|---|---|---|
+| Equity input | SPY | KOSPI200 |
+| Volatility input | VIX | VKOSPI |
+| Credit input | Moody's Baa yield minus U.S. 10-year Treasury yield | Korean corporate AA− 3-year yield minus Treasury 3-year yield |
+| Primary warning horizon | Next 10 trading days | Next 10 trading days |
+| Model specification | Existing 17-feature specification | Separate existing 17-feature specification |
+| Models | Logistic Regression baseline and XGBoost | Separate Logistic Regression baseline and XGBoost |
+| Current inference | Frozen U.S. XGBoost model | Frozen Korea XGBoost model |
+| Regime presentation | Existing LOW / WATCH / ELEVATED / HIGH bands | Existing Korea WARNING / BELOW WARNING reference |
 
----
+Each market retains its own MSI construction, historical distribution, stress-event definition, targets, model artifacts and warning semantics. **U.S. thresholds, bands and regimes are never applied to Korea, or vice versa.** The dashboard's U.S./Korea comparison places the independent systems alongside each other; it does not pool or normalize their models into a common probability scale.
 
-# 1. System Overview
+The **Market Stress Index (MSI)** describes observed market conditions. The **10-trading-day Risk Score** is a model-based forward warning signal, not a calibrated probability. A score of 70 does not mean a 70% event probability, and equal scores across markets need not imply equal event likelihoods.
 
-The system combines information from three major market channels:
+### Validation and explanation
 
-- **Equity:** SPY
-- **Volatility:** VIX
-- **Credit:** Moody's Baa Corporate Yield − 10-Year U.S. Treasury Yield
+Historical model evaluation uses **chronological, expanding walk-forward out-of-sample validation**, with a label-overlap purge appropriate to the forward horizon. Random train/test splitting is not the validation design. Incomplete forward targets remain unknown instead of becoming artificial negative labels. U.S. multi-horizon diagnostics additionally cover 1, 5, 10 and 20 trading days; they are distinct tasks with different target prevalence.
 
-These inputs are used to construct:
+Logistic Regression provides the linear reference and XGBoost the nonlinear comparison/deployment model. The validation pages report their trade-offs using the existing OOS artifacts; neither is described as a universal winner. See the market-specific validation pages and [methodology source](src/korea/korea_walk_forward.py) rather than treating a static README metric as a current production result.
 
-- a **Market Stress Index (MSI)**
-- forward Stress Event targets
-- **17 predictive features**
-- Logistic Regression and XGBoost early-warning models
-- walk-forward out-of-sample historical risk scores
-- SHAP-based current model explanations
-- LOFO out-of-sample signal importance
+**SHAP explains contributions to the fitted model's output.** It does not establish causality or probability-point changes. Current channel summaries show net contributions among available leading drivers and their strongest representative feature. Detailed SHAP remains the evidence layer below them.
 
-The fitted XGBoost deployment model produces the latest:
+During a successful refresh, attribution uses the exact validated feature row and the same frozen model/checksum as the result. Observation dates, feature provenance and model identity must agree. Snapshot-bound attribution is published with the validated snapshot; stale or mismatched attribution is rejected rather than relabelled. See [snapshot attribution](docs/snapshot-attribution.md).
 
-**10-Day Market Stress Risk Score**
+## Automated refresh and freshness safeguards
 
-The score is an early-warning model output and **is not interpreted as a calibrated event probability**.
+The API's optional embedded scheduler runs independent U.S. and Korea refresh jobs using exchange calendars, publication deadlines, per-series expectations, bounded provider calls and per-market locks. `MARKET_REFRESH_ENABLED` controls it; the staging template deliberately defaults to disabled until the controlled first refresh is approved. A running deployment's actual setting and heartbeat must be checked separately.
 
----
+Refresh retrieves market inputs, validates provenance/dates/values, computes the existing features and MSI, and performs inference with the **frozen models**. It does not retrain, recalibrate or change model thresholds. Staged artifacts and a transactional snapshot pointer protect readers from partial publication. Failures preserve the last-known-good snapshot; the API separately exposes the latest attempt, observation/publication timestamps, model availability and freshness status.
 
-# 2. Dashboard
+A last-known-good score may remain visible with a clear delayed/stale warning. **Conditional sector/portfolio analytics intentionally become unavailable when required current market inputs fail freshness checks**, even if prices or an older model score remain available. Successful provider retrieval alone does not make an old observation current. One market's failure does not make the other market unavailable.
 
-The project includes a Next.js dashboard backed by a FastAPI API.
+For example, during local evaluation on October 15, 2026, the U.S. publication boundary advanced while FRED credit observations still ended October 13. The existing refresh succeeded using the validated common row, but U.S. health became `DELAYED` and conditional analytics were withheld. No dates or safety limits were overridden to keep charts populated.
 
-### PAGE 01 — Market Risk Intelligence
+See [reliability rules](docs/data-reliability.md) and [automation review](docs/data-automation-review.md).
 
-Provides:
+## Unified Paper Trading
 
-- current SPY, VIX, and credit-spread conditions
-- Market Stress Index
-- 10-Day Market Stress Risk Score
-- LOW / WATCH / ELEVATED / HIGH risk classification
-- market-channel risk summary
-- SHAP risk-increasing and risk-reducing drivers
-- historical walk-forward OOS Risk Score vs SPY
+Every newly registered user receives **one conceptual portfolio**:
 
-### PAGE 02 — Model Validation
+- Base currency: **USD**; initial total capital: **$100,000**.
+- Initial cash: **USD $100,000 and KRW ₩0**.
+- Initial positions, orders, realized/unrealized P&L and accumulated costs: zero.
+- One total equity, USD P&L and recorded performance history across both markets.
 
-Provides:
+The two database `portfolios` rows are internal native-currency settlement ledgers, **not independently funded USD/KRW portfolios**. Market filters change presentation, not ownership, capital or settlement rules.
 
-- Logistic Regression vs XGBoost
-- 1D / 5D / 10D / 20D horizon validation
-- ROC-AUC / PR-AUC / Brier Score
-- Precision / Recall / F1
-- False Alarm Rate / Missed Event Rate
-- historical stress-period analysis
-- pre-stress early-warning analysis
-- warning-persistence analysis
-- LOFO OOS signal importance
+The unified security picker searches existing U.S. and Korea Symbol Master identities by ticker/company name, including Korean names and symbols. Selecting a listing automatically selects its market/currency and fetches a validated **completed daily-close** quote. Security-discovery coverage is broader than the small reviewed analytics-evidence universe; a searchable security is not automatically covered by historical analytics.
 
-### PAGE 03 — Methodology
+The order ticket supports simulated whole-share BUY/SELL, quantity-driven estimates, ownership/expiry checks, available-share and cash limits, and explicit final review. Native cash pays first. Any required cross-currency shortfall conversion must be reviewed and accounted for; Korean purchases cannot create free KRW. Margin, leverage, short selling, fractional shares and real brokerage execution are not provided.
 
-Documents:
+Server-approved previews bind the quote, quantity, dated cost policy, FX and cash state. Orders, positions, cash, cost details and conversion events commit together or roll back together. Accepted idempotent retries return the original execution rather than charging again.
 
-- Stress Event definition
-- target construction
-- feature specification
-- label-overlap purge
-- expanding walk-forward validation
-- SHAP interpretation
-- feature-extension experiments
-- model limitations
+**Admins and normal users have identical trading and analytics functionality.** Admin roles provide administrative privileges only. There are no Free/Pro tiers, paywalls, upgrade prompts or plan-based analytics gates. A future AI Risk Advisor is not an implemented recommendation service. See [access policy](docs/product-access-policy.md).
 
----
+### Delayed FX and costs
 
-# 3. Market Stress Index
+| FX source | Role | Application acceptance/cache policy |
+|---|---|---|
+| exchangerate.dev Free | Preferred latest-available USD/KRW source, approximately **15-minute delayed** | Independent observation age ≤30 minutes; retrieval age ≤15 minutes; on-demand shared refresh after 10 minutes |
+| FRED DEXKOUS / Federal Reserve H.10 | Delayed daily fallback/reference | Observation age ≤10 calendar days; retrieval age ≤6 hours; cache refresh after 1 hour |
 
-Broad market stress is defined across three dimensions.
+These are indicative simulation inputs, **not real-time dealing quotes**. Original observation and retrieval timestamps remain distinct; provider `stale=false` alone is insufficient. Invalid preferred observations fall back only to independently validated FRED data. If both sources fail their checks, required FX conversion/valuation is unavailable. The preferred cache/backoff is shared within the configured single API worker, not refreshed once per user.
 
-| Component | Definition |
+The provider abstraction permits a later replacement without rewriting portfolio accounting or execution history. The preferred key is read only from **`EXCHANGERATE_API_KEY`** on the server. Local `.env` is ignored; templates contain no real credentials. Legacy alternative adapters remain disabled unless explicitly configured with the required rights. No alternative provider is activated by this documentation.
+
+Each execution retains its original reference FX, observation/retrieval metadata, applied conversion rate, amounts, spread and costs. Later valuations use current validated FX without rewriting historical fills. Reconciled attribution distinguishes native investment effects, FX translation, trading costs, conversion costs and rounding when complete execution evidence exists; otherwise attribution is withheld.
+
+Fees are **versioned simulation assumptions**, not universal broker charges or investor-specific tax advice. The current dated policy includes market/instrument/side-specific commissions, applicable simulated transaction/regulatory costs, FX spread and minor-unit rounding. BUY costs enter native cost basis; SELL proceeds are net of costs. Costs already reflected in cash are not deducted twice. Unsupported classifications or expired cost schedules fail closed. The current policy covers 2026 and requires review before trading beyond its validity period. Dividends paid into the simulated account, personal income/capital-gains taxes and certain product/venue charges are not modeled.
+
+See [delayed FX policy](docs/delayed-fx-provider.md), [cost assumptions](docs/realistic-paper-trading-costs.md) and [immutable execution FX / reconciliation](docs/execution-fx-attribution.md).
+
+### Existing demo-account migration
+
+Existing dual-funded accounts are not silently converted or retained as a supported alternative product experience. Schema initialization preserves existing identities and trading records; accounts without a unified root fail closed for unified trading/valuation until the explicit migration is applied.
+
+A separate **once-only admin1/user1 demo-trading reset CLI** is implemented with a private SQLite backup, role/existence checks, one atomic transaction and migration markers. It preserves user IDs, usernames, password hashes, roles and sessions and resets only the authorized Paper Trading data. It uses the same initializer as future users. **It has not been run on the existing admin1/user1 accounts or AWS.** Committing source or starting the API does not execute that reset. See [migration mechanism and maintenance procedure](docs/demo-account-migration.md); do not run it as routine startup.
+
+## Historical conditional portfolio analytics
+
+This deterministic layer reads existing market-specific OOS outputs and current validated snapshots. It does not modify or rerun historical market models, invent sector-risk scores, or infer sectors from company names.
+
+1. **Current Market Stress:** preserve each market's existing regime and validated observation.
+2. **Sector / Industry Stress:** select historical OOS observations in the comparable regime, then calculate subsequent 10-trading-day adjusted instrument returns.
+3. **Portfolio Exposure:** map verified current holdings by market, sector, industry, currency and individual security using actual USD-equity weights. Unknown classifications remain explicit; currency includes cash.
+4. **Stress Sensitivity:** prefer reliable security-level evidence; otherwise allow only an explicitly reviewed same-market sector proxy. Identify the evidence level. Intersect event start/end dates across all holdings before aggregating weighted historical outcomes.
+5. **Historical 10D Outlook:** report the empirical portfolio distribution where supportable, separately from **Actual Performance**, which contains only actual recorded valuations.
+
+Sampling selects matching dates chronologically and excludes overlapping 10-session return increments. An instrument needs all 11 valid closes over each window; missing sessions are never filled or compressed. Event selection does not use the subsequent returns. With at least **20 observations**, report median, Q25–Q75, negative-return frequency and dispersion; downside Q10 requires **100 observations**. Smaller samples expose counts and withhold unsupported estimates. Serial dependence remains possible; these cutoffs do not establish significance or calibrated probabilities.
+
+A whole-portfolio range currently requires invested holdings in **one market**, complete evidence and sufficient joint samples. Cash-only accounts receive no stock-return outlook. Portfolios holding both U.S. and Korea securities show separate market contributions; their combined range is withheld until aligned joint-market sampling is supported. Quantiles are never added across independent markets.
+
+Scenarios use current holdings weights, hold current validated FX constant, assume zero cash return and no future trades/additional costs, and use adjusted histories that include instrument distributions. They describe **what historically followed comparable conditions**, not what will happen next. Negative-return frequency is a historical sample proportion, not a guaranteed forecast or future-loss probability. The actual-performance chart does not manufacture history from same-day fills or repeated visits.
+
+See [sampling and analytics contract](docs/conditional-portfolio-analytics.md).
+
+### Current reviewed evidence coverage
+
+The first local research coverage contains **six instruments**, not every sector, industry or listed security:
+
+| Market | Security evidence | Reviewed sector proxy | Industry benchmark |
+|---|---|---|---|
+| U.S. | NVIDIA — `NVDA` | Technology — `XLK` | Semiconductors — `SOXX` |
+| Korea | SK hynix — `000660.KS` | KODEX IT — `266370.KS` | KODEX semiconductor — `091160.KS` |
+
+The October 15, 2026 local collection used valid histories through October 14. U.S. histories start in 2006; Korea coverage varies by instrument/inception. Missing Korean ETF observations remain missing and reduce eligible samples. No pre-inception index history is spliced onto funds.
+
+The collector reuses canonical Symbol Master identities, structured provider classifications and issuer-reviewed fund mandates, with explicit split/dividend-adjusted prices. Receipts preserve source, identity, retrieval/review timestamps, adjustment checks, coverage, review scope and SHA-256 hashes. The importer validates complete bundles and atomically publishes each market independently; failed imports preserve installed evidence. There is no automatic evidence collector on API startup or in the market refresh scheduler.
+
+Current classifications are not a historical point-in-time taxonomy. ETF mandates are proxy evidence, not a full holdings look-through. Industry benchmarks are descriptive context, not implicit security substitutes. Corporate-action checks/spot checks do not independently certify every vendor action. Other holdings, including uncovered common stocks, can trade if valid quotes exist while their analytics remain unavailable. One uncovered holding can block the joint portfolio distribution.
+
+**The evidence files, raw receipts, local numerical reports and disposable QA data are private, Git-ignored local artifacts. They are not supplied by cloning the repository and are not included in the staging artifact manifest.** Missing reviewed evidence produces unavailable analytics, not placeholder numbers. See [sources and evidence lifecycle](docs/real-stress-evidence.md) and [verification scope](docs/real-stress-evidence-results.md).
+
+## Data and licensing boundaries
+
+The application uses existing Yahoo Finance/yfinance, FRED, KRX/ECOS and listing-directory integrations for their respective purposes. Data availability, attribution, access conditions and vendor revisions remain source-specific. Public code, possession of an API key and non-commercial intent do **not** independently establish public display, redistribution, permanent retention or derived-data rights for every source.
+
+The reviewed analytics bundles explicitly retain **`public_display_rights=not_confirmed`** and a local non-commercial research/demo scope. Yahoo/yfinance research/personal-use notices are not treated as authorization for a public multi-user service. Issuer mandate documents do not grant general rights over index histories or commercial classification systems. Keep private evidence out of Git and deployment bundles until appropriate rights or a licensed substitute are established.
+
+The approved exchangerate.dev Free choice is for this non-commercial demo, with provider attribution and delayed wording. It is not a blanket commercial/public redistribution license; verify applicable terms and quota before a different deployment/use. FRED remains a delayed reference subject to its source terms. No guarantee of uninterrupted access, tick-level execution quality or universal public-deployment permission is made.
+
+## Architecture
+
+```text
+Next.js / React / TypeScript bilingual dashboard
+    ├─ Market pages, U.S./Korea comparison, validation and methodology
+    └─ Authenticated Paper Trading + deterministic portfolio analytics
+             │ same-origin API proxy
+FastAPI (single API worker)
+    ├─ Independent validated U.S./Korea snapshots + snapshot-bound SHAP
+    ├─ Optional market refresh scheduler / durable job ledger
+    ├─ Symbol Master → validated completed-close quotes
+    ├─ Unified account → settlement previews → atomic simulated orders
+    ├─ FX provider abstraction → shared cache → immutable execution evidence
+    └─ OOS + reviewed adjusted histories → conditional analytics
+             │
+Persistent data: operations ledger/snapshots; private account SQLite;
+Symbol Master; reviewed evidence/receipts; approved historical artifacts
+Frozen models: independently versioned/verified, mounted read-only on AWS
+```
+
+| Path | Responsibility |
 |---|---|
-| Equity Stress | Negative 21-trading-day SPY return |
-| Volatility Stress | VIX level |
-| Credit Stress | Baa corporate yield − 10-Year U.S. Treasury yield |
-
-Each component is standardized using a **252-trading-day rolling Z-score**.
-
-The rolling reference distribution is shifted so that the reference statistics for date `t` use only information available before that observation.
-
-The three components receive equal weights:
-
-```text
-MSI = (Z_Equity + Z_VIX + Z_Credit) / 3
-```
-
-The MSI describes **current market stress**.
-
-It is distinct from the forward-looking Risk Score.
-
----
-
-# 4. Stress Event and Forward Targets
-
-A Stress Event occurs when the Market Stress Index exceeds a threshold estimated from historical information available at that time.
-
-Forward targets ask whether a Stress Event occurs within a specified future trading horizon.
-
-For the primary 10-day model:
-
-```text
-Target_10D(t) = 1
-```
-
-if at least one Stress Event occurs during:
-
-```text
-t+1 ... t+10
-```
-
-Otherwise:
-
-```text
-Target_10D(t) = 0
-```
-
-Incomplete forward horizons remain unknown rather than being converted into artificial negative observations.
-
-Additional robustness horizons are evaluated at:
-
-- 1 trading day
-- 5 trading days
-- 10 trading days
-- 20 trading days
-
----
-
-# 5. Final Feature Set — 17 Features
-
-The final specification intentionally remains compact.
-
-## Equity — 7
-
-- SPY 1D Return
-- SPY 5D Return
-- SPY 20D Return
-- SPY 20D Volatility
-- SPY 60D Volatility
-- SPY Drawdown
-- SPY 20D Momentum
-
-## Volatility — 5
-
-- VIX Level
-- VIX 1D Change
-- VIX 5D Change
-- VIX 20D Momentum
-- VIX 252D Z-Score
-
-## Credit — 5
-
-- BAA–Treasury Spread Level
-- Credit 1D Change
-- Credit 5D Change
-- Credit 20D Momentum
-- Credit 252D Z-Score
-
-Additional variables were retained only when they demonstrated defensible incremental value under the same out-of-sample framework.
-
----
-
-# 6. Model Selection
-
-Two models are used.
-
-## Logistic Regression
-
-Used as an interpretable linear baseline.
-
-It provides a useful reference for determining whether a more flexible nonlinear model adds practical value.
-
-## XGBoost
-
-Used as the nonlinear deployment model.
-
-It can capture nonlinear relationships and interactions between equity, volatility, and credit-market conditions.
-
-### Why not simply add more algorithms?
-
-The purpose of this project is not to maximize the number of algorithms compared.
-
-Logistic Regression and XGBoost provide two meaningfully different model classes:
-
-```text
-Interpretable linear baseline
-            ↓
-Logistic Regression
-
-Nonlinear tree boosting
-            ↓
-XGBoost
-```
-
-Random Forest would add another tree-based ensemble with a partially overlapping role.
-
-Deep-learning models were not prioritized because the final dataset consists of a relatively small set of structured financial-market features. Increasing model complexity was not assumed to produce more reliable out-of-sample early-warning performance.
-
-Model complexity is therefore kept proportional to the data and research objective.
-
----
-
-# 7. Leakage-Safe Walk-Forward Validation
-
-Random train/test splitting is **not used**.
-
-Financial time series must preserve chronological order.
-
-Evaluation follows an expanding walk-forward structure:
-
-```text
-TRAIN → PURGE → OOS TEST → EXPAND
-```
-
-Because an `H`-day target uses future observations through `t+H`, the corresponding validation uses an `H`-observation label-overlap purge.
-
-Therefore:
-
-| Horizon | Purge |
-|---:|---:|
-| 1D | 1 observation |
-| 5D | 5 observations |
-| 10D | 10 observations |
-| 20D | 20 observations |
-
-This prevents training labels whose forward windows overlap the beginning of the test period.
-
-Historical dashboard Risk Scores are **walk-forward out-of-sample predictions**, not in-sample backfits.
-
----
-
-# 8. Multi-Horizon OOS Results
-
-## 1-Day Horizon
-
-| Model | ROC-AUC | PR-AUC | Brier | Precision | Recall | F1 |
-|---|---:|---:|---:|---:|---:|---:|
-| Logistic | 0.9886 | 0.9247 | 0.0483 | 0.5913 | 0.9556 | 0.7305 |
-| XGBoost | 0.9844 | 0.9001 | 0.0398 | 0.6449 | 0.9172 | 0.7573 |
-
-OOS observations: **5,069**
-
-Positive prevalence: **9.77%**
-
----
-
-## 5-Day Horizon
-
-| Model | ROC-AUC | PR-AUC | Brier | Precision | Recall | F1 |
-|---|---:|---:|---:|---:|---:|---:|
-| Logistic | 0.9611 | 0.8557 | 0.0888 | 0.5392 | 0.9113 | 0.6775 |
-| XGBoost | 0.9498 | 0.8337 | 0.0710 | 0.6049 | 0.8366 | 0.7021 |
-
-OOS observations: **5,065**
-
-Positive prevalence: **14.02%**
-
----
-
-## 10-Day Horizon — Primary Model
-
-| Model | ROC-AUC | PR-AUC | Brier | Precision | Recall | F1 | FAR | Missed Rate |
-|---|---:|---:|---:|---:|---:|---:|---:|---:|
-| Logistic | 0.9220 | 0.8065 | 0.1282 | 0.4932 | 0.8665 | 0.6286 | 0.1885 | 0.1335 |
-| XGBoost | 0.8991 | 0.7778 | 0.0986 | 0.5929 | 0.7760 | 0.6722 | 0.1128 | 0.2240 |
-
-OOS observations: **5,060**
-
-Positive prevalence: **17.47%**
-
-At the fixed `0.5` reference threshold:
-
-- Logistic Regression provides stronger discrimination and recall.
-- XGBoost provides higher precision and F1 and fewer false alarms.
-- XGBoost also produces the lower Brier score.
-
-XGBoost is therefore **not described as an unconditional performance winner**.
-
-The two models exhibit different operational trade-offs.
-
----
-
-## 20-Day Horizon
-
-| Model | ROC-AUC | PR-AUC | Brier | Precision | Recall | F1 |
-|---|---:|---:|---:|---:|---:|---:|
-| Logistic | 0.8555 | 0.7320 | 0.1752 | 0.4727 | 0.8019 | 0.5948 |
-| XGBoost | 0.8138 | 0.7099 | 0.1485 | 0.5495 | 0.6920 | 0.6126 |
-
-OOS observations: **5,050**
-
-Positive prevalence: **22.89%**
-
-Raw model scores should not be compared as literal probabilities across horizons because target prevalence changes mechanically with the forward window.
-
----
-
-# 9. Early-Warning Analysis
-
-Predictive ranking metrics alone do not answer an operational question:
-
-> **Does the model actually produce warnings before known stress episodes?**
-
-Using 29 historical OOS stress episodes, the proportion containing at least one warning before stress onset was examined.
-
-## Logistic Regression
-
-| Pre-Stress Window | Episodes with ≥1 Warning |
-|---|---:|
-| 20–11 trading days | 69.0% |
-| 10–6 trading days | 72.4% |
-| 5–1 trading days | 100.0% |
-
-## XGBoost
-
-| Pre-Stress Window | Episodes with ≥1 Warning |
-|---|---:|
-| 20–11 trading days | 48.3% |
-| 10–6 trading days | 62.1% |
-| 5–1 trading days | 86.2% |
-
-These figures are **conditional on known historical stress episodes**.
-
-They are not model accuracy rates.
-
-The 20–11 day window is exploratory because it extends beyond the primary 10-day forecast horizon.
-
----
-
-# 10. Warning Persistence
-
-A one-day threshold crossing may be transient.
-
-To examine whether persistent warnings are more informative, XGBoost warning episodes are anchored to the **first day the OOS Risk Score crosses the fixed 0.5 reference threshold**.
-
-The analysis then checks whether a Stress Event occurs within the following 20 trading observations.
-
-| Minimum Warning Persistence | Historical Stress Follow-Through |
-|---|---:|
-| ≥1 day | 38.0% |
-| ≥2 days | 48.2% |
-| ≥3 days | 57.1% |
-
-Longer warning persistence was historically associated with greater stress follow-through.
-
-This is an experimental warning-episode diagnostic and is distinct from the standard classification False Alarm Rate.
-
----
-
-# 11. Risk Score ≠ Calibrated Probability
-
-Calibration diagnostics showed overconfidence in several intermediate and high-score regions.
-
-Therefore the dashboard reports:
-
-**Market Stress Risk Score**
-
-rather than:
-
-**Stress Event Probability**
-
-For example:
-
-```text
-Risk Score = 70
-```
-
-does **not** mean:
-
-```text
-70% probability of a Stress Event
-```
-
-The score should be interpreted as a model-based relative warning signal.
-
----
-
-# 12. Risk-Level Communication Bands
-
-For dashboard communication, the 10-day XGBoost Risk Score is grouped into descriptive bands:
-
-| Risk Score | Dashboard Level |
-|---:|---|
-| < 30 | LOW |
-| 30–49.9 | WATCH |
-| 50–69.9 | ELEVATED |
-| ≥ 70 | HIGH |
-
-These bands are a communication layer rather than calibrated probability intervals.
-
-Historical walk-forward OOS observations showed increasing empirical 10-day Stress Event prevalence as scores increased.
-
-The fixed `0.5` model reference threshold also marks the transition into the ELEVATED range.
-
----
-
-# 13. SHAP Explainability
-
-SHAP explains the fitted XGBoost deployment model's latest output.
-
-The dashboard separates:
-
-- **Risk Increasing Drivers**
-- **Risk Reducing Drivers**
-
-It also aggregates leading SHAP effects into three market channels:
-
-- Stock Market
-- Market Volatility
-- Credit Conditions
-
-Channel labels represent the **net direction of the leading SHAP contributions**.
-
-Individual variables within the same channel may still move in opposite directions.
-
-SHAP values describe model-output contributions.
-
-They should **not** be interpreted as percentage-point changes in event probability.
-
----
-
-# 14. SHAP vs LOFO OOS Importance
-
-SHAP and out-of-sample signal importance answer different questions.
-
-### SHAP
-
-> What is driving the fitted model's output?
-
-### LOFO — Leave One Feature Out
-
-> Does this feature provide incremental predictive information out of sample, conditional on the other features?
-
-The primary LOFO metric is:
-
-```text
-Δ PR-AUC = Full 17-Feature PR-AUC − Reduced 16-Feature PR-AUC
-```
-
-Positive values indicate incremental OOS contribution.
-
-Negative values may indicate redundancy or noise conditional on the remaining features; they do not imply that the underlying financial variable is inherently unimportant.
-
-The strongest consistent unique OOS signals across the two models were:
-
-- **VIX 252D Z-Score**
-- **Credit Spread 252D Z-Score**
-
-This suggests that the **relative level of volatility and credit stress compared with their own recent history** contains particularly useful early-warning information.
-
-LOFO is used for interpretation, not automatic feature pruning.
-
-The final specification remains the predefined 17-feature set.
-
----
-
-# 15. Feature Extensions and Ablation Tests
-
-Additional market variables were evaluated under the same purged walk-forward OOS framework.
-
-Variables were not retained simply because they were economically plausible.
-
-They had to demonstrate consistent incremental predictive value.
-
-## U.S. Rates / Yield Curve
-
-Treasury-rate and yield-curve variables were evaluated as an extension of the core model.
-
-They did not provide consistent incremental OOS predictive value over the existing equity, volatility, and credit features.
-
-**Decision: excluded from final specification.**
-
-This does not imply that interest rates are economically unimportant.
-
----
-
-## Banking / Liquidity
-
-Banking and liquidity indicators were evaluated after the 2023 U.S. banking turmoil.
-
-Under the same purged walk-forward OOS framework, they did not provide consistent incremental predictive value over the core 17-feature model.
-
-**Decision: excluded.**
-
-The 2023 banking turmoil temporarily elevated model Risk Scores but did not satisfy the project's broad-market Stress Event definition.
-
-The target was not redefined post hoc to force the episode to become a positive event.
-
----
-
-## Market Breadth — RSP / SPY
-
-An equity-breadth extension using RSP relative to SPY was evaluated.
-
-### Logistic Regression
-
-```text
-Core 17F PR-AUC:    0.7477
-Breadth 20F PR-AUC: 0.7242
-```
-
-### XGBoost
-
-```text
-Core 17F PR-AUC:    0.7425
-Breadth 20F PR-AUC: 0.7273
-```
-
-The breadth extension did not improve OOS performance.
-
-**Decision: excluded.**
-
----
-
-## Bitcoin
-
-Bitcoin-related features were evaluated on a common post-2014 sample to avoid giving the extended model a different evaluation period.
-
-### Logistic Regression
-
-```text
-Core 17F PR-AUC: 0.7150
-BTC 21F PR-AUC:  0.7004
-```
-
-### XGBoost
-
-```text
-Core 17F PR-AUC: 0.7472
-BTC 21F PR-AUC:  0.7389
-```
-
-Bitcoin reacted to several stress periods, but its addition did not materially improve early-warning performance in this framework.
-
-**Decision: excluded.**
-
----
-
-# 16. Credit-Spread Proxy
-
-The credit variable is:
-
-**Moody's Seasoned Baa Corporate Bond Yield − 10-Year U.S. Treasury Constant Maturity Rate**
-
-It is a **Baa–Treasury credit-stress proxy**.
-
-It should not be described as ICE BofA High Yield OAS.
-
-A long-history credit proxy was used so that validation could include major historical stress periods such as the Global Financial Crisis.
-
----
-
-# 17. API
-
-| Endpoint | Purpose |
+| `src/operations/` | Calendar/publication-aware refresh, validation, snapshot publication and scheduler |
+| `src/explainability/attribution.py` | Frozen-model, exact-row attribution and consistency checks |
+| `src/korea/`, `src/features/`, `src/models/` | Existing independent research/model/feature implementations |
+| `src/paper/` | Identity-preserving account storage, discovery, quotes, unified accounting, FX, costs and analytics |
+| `src/admin/` | Explicit account/admin, audit, demo migration and reviewed-evidence operator CLIs |
+| `frontend/src/app/` | Bilingual UI and same-origin proxies |
+| `deploy/`, `scripts/staging_state.py` | Compose/Caddy deployment, artifact manifests, verification and backup tooling |
+| `tests/`, `frontend/tests/` | Backend regression and deterministic frontend tests |
+
+Representative endpoints:
+
+| Scope | Endpoints |
 |---|---|
-| `GET /health` | API health |
-| `GET /api/latest` | Latest market data, MSI and Risk Score |
-| `GET /api/shap` | Latest XGBoost SHAP drivers |
-| `GET /api/historical` | Historical walk-forward OOS series |
-| `GET /api/validation` | Primary OOS validation |
-| `GET /api/multi-horizon-validation` | 1D / 5D / 10D / 20D validation |
+| Health/current data | `/health`, `/api/latest`, `/api/korea/latest`, `/api/data-health` |
+| Explanation/history/validation | `/api/shap`, `/api/historical`, `/api/validation`, `/api/multi-horizon-validation`; Korea equivalents `/api/korea/shap`, `/api/korea/historical`, `/api/korea/validation` |
+| Accounts | `/api/auth/register`, `/api/auth/login`, `/api/auth/me`, `/api/auth/logout` |
+| Owner-scoped portfolio | `/api/paper/investment`, `/api/paper/securities`, `/api/paper/quote`, `/api/paper/settlement`, `/api/paper/orders`, `/api/paper/fx`, `/api/paper/fx-ledger`, `/api/paper/stress-analytics` |
 
----
+Browser workspace requests use `/api/workspace/...`; the Next.js proxy forwards approved paths to the API. Authentication, ownership, CSRF and admin-role authorization remain server-side concerns.
 
-# 18. Tech Stack
+## Local evaluation
 
-### Machine Learning / Data
-
-- Python
-- pandas
-- NumPy
-- scikit-learn
-- XGBoost
-- SHAP
-
-### Backend
-
-- FastAPI
-- Uvicorn
-
-### Frontend
-
-- Next.js
-- React
-- TypeScript
-- Tailwind CSS
-- Recharts
-
-### Market Data
-
-- Yahoo Finance
-- FRED
-
----
-
-# 19. Local Development
-
-## Backend
+Use Python 3.14 (matching the API Docker runtime) and the Node version specified by `frontend/package.json`/the frontend Dockerfile. Development dependencies are in `requirements.txt`; the API image uses hash-locked `requirements-staging.lock`.
 
 ```bash
-cd market-stress-early-warning
-
-python -m venv .venv
-source .venv/bin/activate
-
-pip install -r requirements.txt
-
-python run_pipeline.py
-python -m src.explainability.shap_analysis
-
-uvicorn src.api.main:app --host 0.0.0.0 --port 8000
+python3 -m venv .venv
+.venv/bin/python -m pip install -r requirements.txt
+npm --prefix frontend ci
 ```
 
-API:
+A checkout alone is not a complete data environment. Restore approved historical/OOS artifacts, the required frozen models and a validated operations context using the documented artifact workflow. Do not run a training pipeline as an application startup step or overwrite frozen weights to populate missing data.
 
-```text
-http://localhost:8000
-```
+Configure server-only credentials in the ignored repository-root `.env` or process environment. Relevant names are `PAPER_SESSION_SECRET` (stable, at least 32 characters), `PAPER_ALLOWED_ORIGINS`, `FRED_API_KEY`, `KRX_API_KEY`, `ECOS_API_KEY` and `EXCHANGERATE_API_KEY`. `PAPER_DB_PATH` and `MARKET_OPERATIONS_DIR` select account and operations storage. `MARKET_DATA_ROOT`/`MARKET_MODELS_ROOT` select artifact roots. Use exact allowed origins; secure cookies are required on staging HTTPS. Never put secrets in Git, `NEXT_PUBLIC_*`, URLs, command arguments or screenshots.
 
-Health check:
-
-```text
-http://localhost:8000/health
-```
-
-## Frontend
-
-Open a separate terminal:
+For isolated evaluation, select a **new disposable `PAPER_DB_PATH`** and an isolated validated `MARKET_OPERATIONS_DIR` before starting the API. Use `APP_ENV=development`, appropriate local origins and `PAPER_COOKIE_SECURE=false` for local HTTP only. Keep the local scheduler disabled unless intentionally testing it. Existing usernames do not need to be reset to create new disposable test users.
 
 ```bash
-cd market-stress-early-warning/frontend
+# Terminal 1: uses the configured server environment and approved artifacts
+.venv/bin/python -m uvicorn src.api.main:app --host 127.0.0.1 --port 8000 --workers 1
 
-npm install
-npm run dev
+# Terminal 2
+API_INTERNAL_URL=http://127.0.0.1:8000 npm --prefix frontend run dev
 ```
 
-Dashboard:
+Open `http://localhost:3000/paper-trading`. Required current inputs and reviewed evidence determine which analytics are available. A missing/expired data environment is not repaired by hardcoding dates or examples. [Evidence collection/import commands](docs/real-stress-evidence.md) are explicit operator actions for the bounded reviewed universe; they are not automatic installation steps or a grant of data-use rights.
 
-```text
-http://localhost:3000
+## AWS / Docker Compose structure
+
+Staging uses [deploy/docker-compose.staging.yml](deploy/docker-compose.staging.yml): a FastAPI API container, a standalone Next.js frontend and Caddy HTTPS proxy. Both API and frontend images require a rebuild for this implementation; restarting old images does not install new code. AWS has not been updated by the local implementation/QA work.
+
+- Environment file: **`/etc/market-stress/staging.env`**; only the empty [template](deploy/staging.env.example) belongs in Git.
+- Host `STAGING_ROOT`: **`/srv/market-stress`**, with persistent data on its bind-mounted `data/` directory.
+- API database: **`/app/data/paper/workspace.sqlite3`**, persisted as **`/srv/market-stress/data/paper/workspace.sqlite3`**.
+- Operations state: `/app/data/operations`; frozen models: read-only `/app/models` from the host's `models/` directory.
+- An approved manifest-backed `STAGING_ARTIFACT_BUNDLE` is required for the API build's named artifact context; the initializer validates/installs expected data without treating an empty bind mount as a complete deployment.
+- Application processes run as non-root with read-only container filesystems, explicit writable persistent volumes and temporary storage. The single API worker preserves the existing embedded scheduler/cache coordination assumptions.
+
+A safe configuration-only check, from the repository directory, is:
+
+```bash
+sudo docker compose --env-file /etc/market-stress/staging.env \
+  -f deploy/docker-compose.staging.yml config --quiet
 ```
 
----
+Do not print rendered environment configuration or secrets. Actual image rebuild, artifact delivery, backups, schema compatibility, the separately approved demo migration, provider configuration/rights and scheduler health checks belong to an approved deployment maintenance procedure. Private research evidence is not automatically deployable with the code. See [AWS staging guide](docs/aws-ec2-staging.md), [artifact delivery](docs/korea-artifact-deployment.md) and [demo migration](docs/demo-account-migration.md).
 
-# 20. Limitations
+## Validation and current evaluation status
 
-- The Risk Score is not a calibrated event probability.
-- The target represents **broad U.S. financial-market stress**, not every type of financial incident.
-- Credit stress is represented using a long-history Baa–Treasury proxy rather than ICE BofA HY OAS.
-- Historical performance is based on purged walk-forward OOS predictions.
-- Current SHAP explains the fitted deployment model rather than historical OOS models.
-- Warning-persistence analysis is an experimental diagnostic and should not be confused with standard classification FAR.
-- Feature-extension results depend on the specific variable definitions, data availability, sample period, and validation framework used here.
-- Historical crisis performance does not guarantee detection of future crises.
-- The system is not an individual-stock trading signal or direct market-timing strategy.
-
----
-
-# 21. Research Principle
-
-> **Methodological defensibility takes priority over model complexity or feature count.**
-
-The project deliberately distinguishes:
-
-```text
-Current stress       → Market Stress Index
-Forward warning      → Market Stress Risk Score
-Model explanation    → SHAP
-Incremental OOS info → LOFO
+```bash
+.venv/bin/python -m pytest tests -q
+npm --prefix frontend test
+npm --prefix frontend run typecheck
+npm --prefix frontend run build
+git diff --check
 ```
 
-Additional variables are retained only when they demonstrate defensible incremental value under the same leakage-safe out-of-sample framework.
+Use `tests/` for the backend regression suite: legacy `src/korea/test_*_api.py` files are live provider probes, not offline regression tests. Provider-boundary regression fixtures are deterministic and use disposable databases; they never reset real users. A supported local alternative when Turbopack's temporary worker port is blocked is `npm --prefix frontend run build -- --webpack`. Browser QA used the standalone production output with its static/public assets, matching the container packaging structure.
 
----
+The local browser pass on October 15, 2026 covered desktop 1440/1640px and responsive 390px layouts, English/Korean presentation, real NVDA/SK hynix paths, unified cross-market holdings, explicit FX/cost review, FRED failover and uncovered-security behavior. Private screenshots/runtime accounts remain excluded from Git. Physical mobile keyboards, Safari/Firefox and genuine multi-day performance remain further checks. Recheck the U.S. positive-state presentation once required upstream observations become current; the freshness guard intentionally withheld it after the publication boundary.
 
-# Korean Summary | 한국어 요약
+No model retraining/recalibration, AWS deployment or existing admin1/user1 reset was performed for this local implementation. Source readiness is separate from data licensing and deployment readiness.
 
-이 프로젝트는 **미국 금융시장 스트레스 조기경보 시스템**입니다.
+## 한국어 요약
 
-단순히 SPY의 상승·하락을 예측하는 주가예측 모델이 아니라,
+미국과 한국의 **독립적인 시장 스트레스 조기경보**를 실제 모의 포트폴리오 노출 및 과거 조건부 분석과 연결하는 비상업용 연구·데모 프로젝트입니다. 각 시장의 MSI·17개 특성·모델·경고 기준을 유지하고, 향후 **10거래일**의 광범위한 시장 스트레스 신호를 제공합니다. 개별 종목 주가 예측, 보장된 전망 또는 투자 추천 서비스가 아닙니다.
 
-> **현재 관측 가능한 주식시장·변동성·신용시장 정보를 이용해 향후 미국 금융시장의 광범위한 Stress Event 위험 상승을 조기에 탐지할 수 있는가?**
+모든 신규 사용자는 USD 기준 총 **$100,000**, USD 현금 **$100,000**·KRW 현금 **₩0**인 하나의 포트폴리오로 시작합니다. 미국·한국 통합 검색, 명시적 환전과 비용, 변경되지 않는 체결 FX 이력을 사용합니다. 관리자도 같은 자본·거래·분석 기능을 사용하며 유료 등급 차별은 없습니다.
 
-를 검증하는 것이 핵심 목적입니다.
-
-### 핵심 구조
-
-```text
-SPY + VIX + Credit Spread
-          ↓
-Market Stress Index
-          ↓
-17개 금융시장 Feature
-          ↓
-Logistic Regression + XGBoost
-          ↓
-Purged Walk-Forward OOS Validation
-          ↓
-10-Day Market Stress Risk Score
-```
-
-시계열 누수를 방지하기 위해 random train/test split 대신 **expanding walk-forward validation**을 사용하며, forward target의 기간에 맞는 **label-overlap purge**를 적용합니다.
-
-Logistic Regression은 해석 가능한 baseline, XGBoost는 비선형 관계를 포착하는 deployment model로 사용합니다.
-
-10D OOS 결과에서 Logistic Regression은 ROC-AUC와 Recall 측면에서 강점을 보였고, XGBoost는 Precision, F1, False Alarm Rate 및 Brier Score 측면에서 강점을 보였습니다.
-
-따라서 XGBoost를 단순히 “가장 성능이 좋은 모델”이라고 주장하지 않습니다.
-
-또한 모델의 raw output에서 calibration 문제가 확인되었기 때문에 웹사이트에서는 이를 실제 발생확률이 아니라 **Market Stress Risk Score**라고 표현합니다.
-
-SHAP은 현재 모델 출력의 주요 원인을 설명하고, LOFO 분석은 각 feature가 다른 변수들을 통제한 상태에서 실제 OOS 예측력에 추가 정보를 제공하는지를 검증합니다.
-
-금리/수익률곡선, Banking/Liquidity, Market Breadth, Bitcoin 관련 변수도 추가 검증했지만 동일한 OOS 환경에서 일관된 증분 예측력을 확인하지 못해 최종 17개 feature에서는 제외했습니다.
-
-이 프로젝트의 핵심 원칙은:
-
-> **변수나 모델의 개수를 늘리는 것보다 실제 Out-of-Sample 환경에서 검증 가능한 방법론적 타당성을 우선하는 것**
-
-입니다.
+시장 스트레스 → 업종/산업 스트레스 → 내 노출 → 과거 스트레스 민감도 → 과거 조건부 10거래일 시나리오를 구분합니다. 검토된 근거는 현재 미국 3개·한국 3개 상품으로 제한되며, 미확인 분류·표본 부족·최신성 미충족 시 분석을 제공하지 않습니다. exchangerate.dev는 약 15분 지연, FRED는 지연 일별 대체·참고 자료입니다. 연구 데이터의 공개 표시·재배포 권한은 별도 확인 대상이며 로컬 검증 승인이나 API 키 보유가 공개 배포 허가를 뜻하지 않습니다.

@@ -2,15 +2,16 @@
 
 import { useEffect, useId, useRef, useState, KeyboardEvent } from 'react';
 import { LocalizedText, useI18n } from '../i18n/provider';
-import { Market, Security, workspace } from './types';
+import { Market, Security } from './types';
+import { searchSecurities } from './workflow';
 
 export function SearchResults({ items, active, listId, onSelect, onActive }: { items: Security[]; active: number; listId: string; onSelect: (item: Security) => void; onActive: (index: number) => void }) {
-  return <ul id={listId} role="listbox" className="security-results">{items.map((item,index) => <li key={item.symbol} id={`${listId}-${index}`} role="option" aria-selected={index===active} onMouseDown={event=>event.preventDefault()} onClick={()=>onSelect(item)} onMouseEnter={()=>onActive(index)}>
-    <div><strong>{item.ticker}</strong><span>{item.name}</span></div><small>{item.exchange} · <LocalizedText>{item.market==='us'?'U.S.':'Korea'}</LocalizedText> · <LocalizedText id={item.security_type==='ETF'?'security_type_etf':'security_type_stock'}/></small>
+  return <ul id={listId} role="listbox" className="security-results">{items.map((item,index) => <li key={`${item.market}:${item.symbol}`} id={`${listId}-${index}`} role="option" aria-selected={index===active} onMouseDown={event=>event.preventDefault()} onClick={()=>onSelect(item)} onMouseEnter={()=>onActive(index)}>
+    <div><strong>{item.ticker}</strong><span>{item.name}</span></div><small>{item.exchange} · <LocalizedText>{item.market==='us'?'U.S.':'Korea'}</LocalizedText> · <LocalizedText id={item.security_type==='ETF'?'security_type_etf':'security_type_stock'}/> · {item.currency}</small>
   </li>)}</ul>;
 }
 
-export default function SecurityPicker({ market, disabled, onSelect, onSearchStart }: { market: Market; disabled: boolean; onSelect: (security: Security) => void; onSearchStart: () => void }) {
+export default function SecurityPicker({ market, disabled, onSelect, onSearchStart }: { market: Market | 'all'; disabled: boolean; onSelect: (security: Security) => void; onSearchStart: () => void }) {
   const { t } = useI18n();
   const [query,setQuery] = useState('');
   const [items,setItems] = useState<Security[]>([]);
@@ -19,18 +20,19 @@ export default function SecurityPicker({ market, disabled, onSelect, onSearchSta
   const [loading,setLoading] = useState(false);
   const [error,setError] = useState('');
   const [stale,setStale] = useState(false);
+  const [partial,setPartial] = useState(false);
   const root = useRef<HTMLDivElement>(null);
   const request = useRef<AbortController | null>(null);
   const listId = useId();
   useEffect(()=>{
     const controller = new AbortController();request.current=controller;
-    setItems([]);setActive(-1);setError('');setStale(false);
+    setItems([]);setActive(-1);setError('');setStale(false);setPartial(false);
     if (!query.trim() || disabled) {setLoading(false);return ()=>controller.abort();}
     setLoading(true);
     const timer=setTimeout(()=>{
-      void workspace<{ data: Security[]; directory_status?: string }>(`paper/securities?market=${market}&q=${encodeURIComponent(query.trim())}&limit=20`,{signal:controller.signal}).then(result=>{
+      void searchSecurities(query,market,controller.signal).then(result=>{
         if(controller.signal.aborted)return;
-        setItems(result.data);setActive(-1);setStale(result.directory_status==='STALE');
+        setItems(result.data);setActive(-1);setStale(result.stale);setPartial(result.partial);
       }).catch(()=>{if(!controller.signal.aborted)setError('Security search is temporarily unavailable. Try again.');})
         .finally(()=>{if(!controller.signal.aborted)setLoading(false);});
     },300);
@@ -58,6 +60,7 @@ export default function SecurityPicker({ market, disabled, onSelect, onSearchSta
     <label><LocalizedText id="security_search_label"/><input role="combobox" aria-autocomplete="list" aria-expanded={open&&items.length>0} aria-controls={listId} aria-activedescendant={open&&active>=0?`${listId}-${active}`:undefined} value={query} disabled={disabled} maxLength={100} autoComplete="off" placeholder={t('Search by company name or ticker')} onKeyDown={keyboard} onFocus={()=>setOpen(true)} onChange={event=>{request.current?.abort();setQuery(event.target.value);setOpen(true);setItems([]);setActive(-1);onSearchStart();}}/></label>
     <div className="security-result-anchor">{open&&items.length>0&&<SearchResults items={items} active={active} listId={listId} onSelect={choose} onActive={setActive}/>}</div>
     <div className="security-search-status" role="status" aria-live="polite">{loading?<LocalizedText id="security_search_loading"/>:error?<LocalizedText>{error}</LocalizedText>:query.trim()&&open&&!items.length?<LocalizedText id="security_search_empty"/>:<LocalizedText id="security_search_hint"/>}</div>
+    {partial&&<p className="comparison-note amber"><LocalizedText id="unified_search_partial"/></p>}
     {stale&&<p className="comparison-note amber"><LocalizedText id="security_directory_stale"/></p>}
   </div>;
 }

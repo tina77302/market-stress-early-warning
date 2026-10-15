@@ -276,8 +276,18 @@ function paperFixture(market,sign=1,positions=true) {
   positions:positions?[{symbol:korea?'005930.KS':'SPY',market,quantity:2,average_cost:1000*unit,latest_price:(1000+sign*50)*unit,
    market_value:(2000+sign*100)*unit,unrealized_pnl:sign*100*unit,return_pct:sign*5,price_observed_at:priceObserved}]:[]};
 }
+function investmentFixture(portfolio,orders=[],performance=[]) {
+ const empty=market=>({...paperFixture(market,0,false),starting_cash:market==='us'?100000:0,cash:market==='us'?100000:0,portfolio_value:market==='us'?100000:0,realized_pnl:0,unrealized_pnl:0,total_return_pct:null});
+ const native={us:empty('us'),korea:empty('korea')};
+ if(portfolio)native[portfolio.market]=portfolio;
+ const total=(native.us.portfolio_value??0)+(native.korea.portfolio_value??0)/1000;
+ const complete=Object.values(native).every(p=>p.valuation_complete);
+ const cash=native.us.cash+native.korea.cash/1000;
+ return {base_currency:'USD',initial_capital:100000,portfolio_value:complete?total:null,cash,invested_value:complete?total-cash:null,total_pnl:complete?total-100000:null,total_return_pct:complete?(total-100000)/1000:null,valuation_complete:complete,observed_at:observed,cash_balances:{USD:native.us.cash,KRW:native.korea.cash},fx:{id:'test-fx',rate:1000,source:'Fixture FX',observation_date:'2026-10-14',retrieved_at:observed,status:'AVAILABLE'},fx_error:null,books:native,performance};
+}
 function renderPaper(language,user,market,portfolio,orders=[],performance=[]) {
- const states=[user,'fixture-csrf',false,market,portfolio,orders,performance,false,'',0];let index=0;
+ const investment=portfolio?investmentFixture(portfolio,orders,performance):null;
+ const states=[user,'fixture-csrf',false,market,portfolio?{[market]:{portfolio,orders,performance}}:{},investment,false,'',0];let index=0;
  React.useState=initial=>{
   if(initial==='en'||initial==='ko')return useStateBefore(initial);
   return index<states.length?[states[index++],()=>{}]:useStateBefore(initial);
@@ -299,26 +309,24 @@ for(const language of ['en','ko']) {
   assert.ok(markup.includes(user.username),'Literal usernames remain verbatim');
   assert.ok(!markup.includes('관리자 1'));
   assert.ok(!markup.includes('href="/admin"'),'No role-based portfolio overrides');
-  for(const amount of [portfolio.portfolio_value,portfolio.cash,portfolio.portfolio_value-portfolio.starting_cash,portfolio.portfolio_value-portfolio.cash]) {
-   assert.ok(markup.includes(require('../src/app/paper-trading/types.ts').value(amount,portfolio.currency,language==='ko'?'ko-KR':'en-US')));
-  }
+  const investment=investmentFixture(portfolio,[order],history);
+  for(const amount of [investment.portfolio_value,investment.cash,investment.total_pnl,investment.invested_value])assert.ok(markup.includes(require('../src/app/paper-trading/types.ts').value(amount,'USD',language==='ko'?'ko-KR':'en-US')));
   assert.ok(markup.includes(sign>0?'paper-gain':'paper-loss'));
-  assert.ok(markup.includes(sign>0?'1.25%':'-1.25%'));
   assert.ok(markup.includes(require('../src/app/paper-trading/types.ts').displaySymbol(market,portfolio.positions[0].symbol)));
   assert.ok(markup.includes(language==='ko'?'실제 자금 사용 없음':'NO REAL MONEY'));
-  assert.ok(markup.includes(language==='ko'?'아직 제공되지 않음':'NOT YET AVAILABLE'));
-  assert.equal((markup.match(/aria-disabled="true"/g)||[]).length,4);
+  assert.ok(markup.includes(language==='ko'?ko.stress_identity:en.stress_identity));
+  assert.ok(markup.includes(language==='ko'?ko.stress_loading:en.stress_loading));
   assert.ok(markup.indexOf('class="paper-summary"')<markup.indexOf('rw-analytics-grid'));
   assert.ok(markup.includes('command-market-status') && markup.includes('command-trade-rail'));
   const catalog=language==='ko'?ko:en;
   assert.ok(markup.includes(catalog.command_motto));
-  assert.ok(markup.includes(catalog.command_intelligence));
-  assert.ok(markup.includes(catalog.command_overlay));
-  assert.ok(markup.indexOf(catalog.rw_available_cash)<markup.indexOf(catalog.rw_invested_value));
-  assert.ok(markup.indexOf(catalog.rw_invested_value)<markup.indexOf(catalog.rw_total_pnl.replaceAll('&','&amp;')));
+  assert.ok(markup.includes(catalog.stress_identity));
+  assert.ok(markup.includes('second_history_insufficient'));
+  assert.ok(markup.indexOf(catalog.rw_available_cash)<markup.indexOf(catalog.capital_invested));
+  assert.ok(markup.indexOf(catalog.capital_invested)<markup.indexOf(catalog.rw_total_pnl.replaceAll('&','&amp;')));
   assert.ok(markup.indexOf('command-order-context')<markup.indexOf(catalog.review_simulated_order_fd4ef9));
   assert.ok(markup.indexOf('paper-holdings')<markup.indexOf('trade-ticket'));
-  assert.ok(markup.indexOf('trade-ticket')<markup.indexOf('rw-activity'));
+  assert.ok(markup.indexOf('rw-activity')<markup.indexOf('command-trade-rail'));
   assert.ok(markup.includes('step="1"')&&markup.includes('max="1000000"'));
   assert.equal(JSON.stringify({portfolio,order,history}),before,'Presentation changed source data');
  }
@@ -329,7 +337,7 @@ for(const language of ['en','ko']) {
   assert.ok(markup.includes(language==='ko'?'이 계좌에 보유한 종목이 없습니다':'No positions in this account'));
   assert.ok(markup.includes((language==='ko'?ko:en).additional_visits_and_fills_record_actual_observations_no_histori_7c82f9));
   const incomplete={...paperFixture(market),valuation_complete:false,portfolio_value:null,unrealized_pnl:null,total_return_pct:null};
-  const summary=render(language,paperComponents.PortfolioSummary,{portfolio:incomplete,currency:incomplete.currency});
+  const summary=render(language,paperComponents.InvestmentSummary,{investment:investmentFixture(incomplete)});
   assert.ok(summary.includes(language==='ko'?'조회 불가':'Unavailable'));
  }
  for(const status of ['CURRENT','DELAYED','STALE','PARTIAL','ERROR']) {
@@ -352,6 +360,36 @@ for(const language of ['en','ko']) {
  const unavailable=render(language,MarketRiskPanel,{market:'us',latest:null});
  assert.ok(!unavailable.includes('undefined'));
 }
+// A sparse or unchanging completed-close history must not masquerade as a performance curve.
+for (const language of ['en','ko']) {
+ const catalog=language==='ko'?ko:en;
+ const first={observed_at:observed,value:10000,cash:10000};
+ const second={observed_at:'2026-10-15T08:00:00+00:00',value:10100,cash:8000};
+ for (const [history,state] of [
+  [[], 'second_history_empty'],
+  [[first], 'second_history_insufficient'],
+  [[first,{...first,value:10100}], 'second_history_insufficient'],
+  [[first,{...first,observed_at:'2026-10-14T09:00:00+00:00',value:9999}], 'second_history_insufficient'],
+  [[first,{...second,value:first.value}], 'second_history_unchanged'],
+  [[{...first,value:NaN},{...second,observed_at:'invalid'}], 'second_history_empty'],
+  [[first,second], 'chart'],
+ ]) {
+  const before=JSON.stringify(history);
+  const markup=render(language,paperComponents.PortfolioPerformance,{performance:history,portfolio:paperFixture('us'),currency:'USD',loading:false});
+  assert.ok(markup.includes(`data-history-state="${state}"`));
+  if(state!=='chart') {
+   assert.ok(markup.includes(catalog[state]));
+   assert.ok(!markup.includes('recharts-responsive-container'));
+   assert.ok(!markup.includes('NaN'));
+  } else assert.ok(markup.includes('recharts-responsive-container'));
+  assert.equal(JSON.stringify(history),before,'Performance presentation mutated recorded valuations');
+ }
+ const loading=render(language,paperComponents.PortfolioPerformance,{performance:[first,second],portfolio:null,currency:'KRW',loading:true});
+ assert.ok(loading.includes(catalog.second_history_loading));
+ assert.ok(!loading.includes('recharts-responsive-container'));
+}
+console.log('Performance history: empty, single observation, duplicate times, unchanged equity, invalid values/dates, loading and genuine changing history passed in both languages.');
+
 console.log('Risk-aware Paper Trading: anonymous/admin1/user1, USD/KRW, gains/losses, empty/incomplete accounts, recorded data, future modules and five model-freshness states passed in both languages.');
 
 // Ticket presentation retains completed-close evidence, review and safe pending-order controls.
@@ -411,3 +449,28 @@ for(const language of ['en','ko'])for(const market of ['us','korea']) {
  }
 }
 console.log('Security discovery: bilingual market/type metadata, canonical Korean tickers, combobox/listbox semantics and disabled order-review state passed.');
+
+for(const language of ['en','ko'])for(const view of ['all','us','korea']) {
+ const books={us:{portfolio:paperFixture('us'),orders:[],performance:[]},korea:{portfolio:paperFixture('korea'),orders:[],performance:[]}};
+ const html=render(language,paperComponents.default,{view,user:{id:22,username:'user1',role:'user'},books,investment:investmentFixture(books.us.portfolio),loading:false,csrf:'fixture-csrf',onExecuted:()=>{}});
+ assert.equal((html.match(/class="paper-summary"/g)||[]).length,1);
+ assert.ok(html.includes((language==='ko'?ko:en).unified_search_scope));
+ assert.ok(html.includes('capital-native-balances'));
+ assert.ok(html.includes((language==='ko'?ko:en).capital_usd_base));
+}
+console.log('Unified books: All/U.S./Korea are display filters; independent USD/KRW values and unified search preserved in both languages.');
+
+// Render the reconciled currency evidence and immutable execution details in both languages.
+const {FxExposure,ExecutionConditions}=require('../src/app/paper-trading/PortfolioWorkspace.tsx');
+const fxEvidence={fx_attribution:{available:true,native_investment_effect_usd:50,fx_translation_effect_usd:-250,trading_costs_usd:0,fx_conversion_costs_usd:0,rounding_residual_usd:0,reconciled_total_usd_pnl:-200,krw_exposure_usd:300,krw_exposure_pct:0.3,krw_cash_fx_unrealized_usd:0,positions:[{market:'korea',symbol:'005930.KS',quantity:10,average_purchase_price:50000,average_acquisition_fx:1000,current_fx:2000,fx_change_pct:100,native_stock_pnl:100000,native_effect_usd:50,fx_effect_usd:-250,purchase_costs_usd:0,total_usd_pnl:-200}]},books:{korea:{positions:[{symbol:'005930.KS',latest_price:60000}]}}};
+const historicalDetail={market:'korea',side:'BUY',currency:'KRW',costs:{gross_minor:500000,commission_minor:75,transaction_tax_minor:0,regulatory_fee_minor:0},fx:{rate:1000,source:'Historical FRED reference',observation_date:'2026-10-14',retrieved_at:'2026-10-15T00:00:00Z',status:'AVAILABLE'},fx_spread_bps:'10',effective_fx_rate:'999',fx_usd_cents:50058,fx_krw:500079,from_currency:'USD',to_currency:'KRW',fx_cost_usd_exact:'0.501',execution_attribution:{available:true,gross_usd:'500'}};
+for(const lang of ['en','ko']){
+ const exposure=render(lang,FxExposure,{investment:fxEvidence});
+ assert.ok(exposure.includes('005930'));assert.ok(exposure.includes('2,000'));assert.ok(exposure.includes('-$250.00')||exposure.includes('-US$250.00'));
+ assert.ok(exposure.includes(lang==='ko'?'시장 스트레스 노출':'Market-stress exposure'));
+ const unavailable=render(lang,FxExposure,{investment:{fx_attribution:{available:false,positions:[]}}});
+ assert.ok(unavailable.includes(lang==='ko'?'모두 확보':'unavailable until'));
+ const historic=render(lang,ExecutionConditions,{detail:historicalDetail});
+ assert.ok(historic.includes('Historical FRED reference'));assert.ok(historic.includes('1,000'));assert.ok(historic.includes('2026-10-14'));assert.ok(!historic.includes('2,000'));
+}
+console.log('FX exposure reconciliation, unavailable evidence and immutable trade conditions render in both languages.');

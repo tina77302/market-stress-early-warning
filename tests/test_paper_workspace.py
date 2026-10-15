@@ -13,7 +13,7 @@ from src.paper.store import database
 
 
 @pytest.fixture
-def workspace_env(tmp_path, monkeypatch):
+def workspace_env(tmp_path, monkeypatch, zero_cost_policy):
     monkeypatch.setenv('PAPER_DB_PATH', str(tmp_path / 'paper.sqlite3'))
     monkeypatch.setenv('PAPER_SESSION_SECRET', 'test-private-secret-' * 4)
     monkeypatch.setenv('PAPER_STARTING_USD', '1000')
@@ -36,6 +36,14 @@ def account(app, email='a@example.com'):
     assert response.status_code == 201, response.text
     assert 'password' not in response.text
     assert 'HttpOnly' in response.headers['set-cookie']
+    # Native accounting edge cases use explicitly seeded low-balance test state.
+    # Production provisioning is tested separately: USD 100,000, KRW 0.
+    with database() as db:
+        user=db.execute('SELECT id FROM users WHERE email=?',(email,)).fetchone()[0]
+        for market,cash in [('us',100000),('korea',10000000)]:
+            db.execute('UPDATE portfolios SET cash=? WHERE user_id=? AND market=?',(cash,user,market))
+            db.execute('UPDATE snapshots SET value=?,cash=? WHERE portfolio_id IN (SELECT id FROM portfolios WHERE user_id=? AND market=?)',(cash,cash,user,market))
+        db.commit()
     csrf = client.get('/api/auth/me').json()['csrf_token']
     return client, csrf
 
@@ -48,6 +56,9 @@ def quote(client, market='us', symbol='SPY'):
 
 def order(client, csrf, side='BUY', quantity=1, symbol='SPY', market='us', quote_id=None, request_key=None):
     payload = {'market': market, 'symbol': symbol, 'side': side, 'quantity': quantity, 'quote_id': quote_id or quote(client, market, symbol), 'request_key': request_key or str(uuid4())}
+    if isinstance(quantity,int) and not isinstance(quantity,bool) and 0<quantity<=1000000:
+        plan=client.get('/api/paper/settlement',params={'quote_id':payload['quote_id'],'side':side,'quantity':quantity})
+        if plan.status_code==200:payload.update({key:plan.json()[key] for key in ['fx_usd_cents','fx_krw','settlement_id']})
     return client.post('/api/paper/orders', json=payload, headers={'x-csrf-token': csrf, 'origin': 'http://testserver'}), payload
 
 
@@ -102,7 +113,7 @@ def test_average_cost_cash_pnl_and_full_exit(workspace_env):
     assert book['unrealized_pnl'] == 300
     assert book['realized_pnl'] == 100
     assert book['portfolio_value'] == 1400
-    assert book['total_return_pct'] == 40
+    assert book['total_return_pct'] is None  # Performance belongs to the single USD base, not this subledger.
     assert book['today_pnl'] is None
     assert len(client.get('/api/paper/orders?market=us').json()['data']) == 3
     assert order(client, csrf, side='SELL', quantity=3)[0].status_code == 201
@@ -122,6 +133,8 @@ def test_invalid_quantities(workspace_env, quantity):
 def test_rejections_and_idempotency(workspace_env):
     app, _ = workspace_env
     client, csrf = account(app)
+    with database() as db:
+        db.execute("UPDATE portfolios SET cash=0 WHERE market='korea'");db.commit()
     assert order(client, csrf, quantity=11)[0].status_code == 409
     assert order(client, csrf, side='SELL')[0].status_code == 409
     assert client.get('/api/paper/quote?market=us&symbol=NOTREAL').status_code == 422
@@ -147,6 +160,8 @@ def test_concurrent_retries_and_overspending(workspace_env):
     client, csrf = account(app)
     q = quote(client)
     payload = {'market':'us','symbol':'SPY','side':'BUY','quantity':6,'quote_id':q,'request_key':str(uuid4())}
+    plan=client.get('/api/paper/settlement',params={'quote_id':q,'side':'BUY','quantity':6}).json()
+    payload.update({k:plan[k] for k in ['settlement_id','fx_usd_cents','fx_krw']})
     def submit(body):
         other = TestClient(app)
         other.cookies.update(client.cookies)
@@ -156,7 +171,8 @@ def test_concurrent_retries_and_overspending(workspace_env):
     assert all(result.status_code == 201 for result in results)
     assert results[0].json()['id'] == results[1].json()['id']
     assert summary(client)['cash'] == 400
-    payloads = [{**payload,'quantity':3,'request_key':str(uuid4())} for _ in range(2)]
+    smaller=client.get('/api/paper/settlement',params={'quote_id':q,'side':'BUY','quantity':3}).json()
+    payloads = [{**payload,'quantity':3,'request_key':str(uuid4()),**{k:smaller[k] for k in ['settlement_id','fx_usd_cents','fx_krw']}} for _ in range(2)]
     with ThreadPoolExecutor(max_workers=2) as pool:
         results = list(pool.map(submit,payloads))
     assert sorted(result.status_code for result in results) == [201,409]

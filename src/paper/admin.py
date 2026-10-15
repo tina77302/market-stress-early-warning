@@ -8,7 +8,7 @@ from fastapi import APIRouter, Depends, Query
 
 from .auth import password_hash, require_admin
 from .service import now_iso
-from .store import database, starting_cash
+from .store import database
 
 router = APIRouter(prefix='/api/admin', tags=['Read-only administration'])
 
@@ -56,10 +56,8 @@ def provision_admin(email, password, promote_existing=False):
         created = now_iso()
         user = db.execute("INSERT INTO users (email,password_hash,created_at,role) VALUES (?,?,?,'admin')", (email, password_hash(password), created))
         # An admin's own simulated accounts obey exactly the same ownership/accounting rules.
-        for market, currency in [('us', 'USD'), ('korea', 'KRW')]:
-            cash = starting_cash(market)
-            portfolio = db.execute('INSERT INTO portfolios (user_id,market,currency,starting_cash,cash,created_at) VALUES (?,?,?,?,?,?)', (user.lastrowid, market, currency, cash, cash, created))
-            db.execute('INSERT INTO snapshots (portfolio_id,observed_at,value,cash) VALUES (?,?,?,?)', (portfolio.lastrowid, created, cash, cash))
+        from .accounts import initialize_portfolio
+        initialize_portfolio(db,user.lastrowid,created)
         record_admin_activity(db, user.lastrowid, 'admin.bootstrap_created', user.lastrowid)
         db.commit()
     return 'created'

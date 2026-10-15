@@ -1,0 +1,31 @@
+{
+  "version": "sim-costs-2026-10-15-v1",
+  "valid_from": "2026-01-01",
+  "valid_through": "2026-12-31",
+  "fx_spread_bps": "10",
+  "commission_bps": {
+    "us": {"Stock": {"BUY": "0", "SELL": "0"}, "ETF": {"BUY": "0", "SELL": "0"}},
+    "korea": {"Stock": {"BUY": "1.5", "SELL": "1.5"}, "ETF": {"BUY": "1.5", "SELL": "1.5"}}
+  },
+  "commission_min_minor": {"us": 0, "korea": 0},
+  "us_sec": [
+    {"from": "2026-01-01", "through": "2026-04-03", "rate": "0"},
+    {"from": "2026-04-04", "through": "2026-12-31", "rate": "0.0000206"}
+  ],
+  "us_taf": [
+    {"from": "2026-01-01", "through": "2026-09-30", "per_share_usd": "0.000195", "max_usd": "9.79"},
+    {"from": "2026-10-01", "through": "2026-12-31", "per_share_usd": "0", "max_usd": "0"}
+  ],
+  "korea_stock_sell_taxes": {
+    "KOSPI": {"securities_transaction_tax": "0.0005", "agricultural_special_tax": "0.0015"},
+    "KOSDAQ": {"securities_transaction_tax": "0.002", "agricultural_special_tax": "0"}
+  },
+  "sources": {
+    "sec": "https://www.sec.gov/rules-regulations/fee-rate-advisories/2026-2",
+    "taf": "https://www.finra.org/rules-guidance/rule-filings/sr-finra-2026-021",
+    "korea_tax": "https://www.law.go.kr/LSW/lsInfoP.do?lsiSeq=280901",
+    "etf_exemption": "https://regulation.krx.co.kr/contents/RGL/03/03060105/RGL03060105.jsp",
+    "us_commission_example": "https://www.fidelity.com/trading/commissions-margin-rates/",
+    "korea_commission_example": "https://download.kiwoom.com/hero4_help_new/0220.htm"
+  }
+}
