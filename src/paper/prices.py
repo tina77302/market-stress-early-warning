@@ -1,6 +1,8 @@
-"""Reuse Yahoo/yfinance with a deliberately limited, non-leveraged security catalog."""
+"""Validated completed-close prices for securities in the listing master."""
 import os
 import time
+import threading
+from collections import OrderedDict
 from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
 from decimal import Decimal, ROUND_HALF_UP
@@ -10,22 +12,13 @@ from fastapi import HTTPException
 
 from .store import factor
 
-SECURITIES = [
-    {'market': 'us', 'symbol': 'SPY', 'name': 'SPDR S&P 500 ETF', 'currency': 'USD'},
-    {'market': 'us', 'symbol': 'QQQ', 'name': 'Invesco QQQ ETF', 'currency': 'USD'},
-    {'market': 'us', 'symbol': 'AAPL', 'name': 'Apple', 'currency': 'USD'},
-    {'market': 'us', 'symbol': 'MSFT', 'name': 'Microsoft', 'currency': 'USD'},
-    {'market': 'korea', 'symbol': '005930.KS', 'name': 'Samsung Electronics', 'currency': 'KRW'},
-    {'market': 'korea', 'symbol': '000660.KS', 'name': 'SK Hynix', 'currency': 'KRW'},
-    {'market': 'korea', 'symbol': '069500.KS', 'name': 'KODEX 200 ETF', 'currency': 'KRW'},
-]
+_price_cache = OrderedDict()
+_price_cache_lock = threading.Lock()
 
 
 def security(market, symbol):
-    item = next((item for item in SECURITIES if item['market'] == market and item['symbol'] == symbol), None)
-    if not item:
-        raise HTTPException(422, 'Unsupported symbol for this market.')
-    return item
+    from .symbol_master import resolve
+    return resolve(market, symbol)
 
 
 @dataclass(frozen=True)
@@ -55,11 +48,27 @@ def fetch_price(market, symbol):
     import yfinance as yf
     local_zone = ZoneInfo('America/New_York' if market == 'us' else 'Asia/Seoul')
     today = datetime.now(local_zone).date()
+    from .symbol_master import path as directory_path
+    key = (str(directory_path()), market,
+           item['provider_symbol'], item['exchange'], item['currency'], item['security_type'],item['name'],today)
+    with _price_cache_lock:
+        cached = _price_cache.get(key)
+        if cached and time.monotonic()-cached[0]<15:
+            ensure_fresh(cached[1])
+            _price_cache.move_to_end(key)
+            return cached[1]
     try:
-        ticker = yf.Ticker(symbol)
+        ticker = yf.Ticker(item['provider_symbol'])
         history = ticker.history(period='1mo', interval='1d', auto_adjust=False, timeout=8)
-        if ticker.history_metadata.get('currency') != item['currency']:
-            raise ValueError('Price currency mismatch')
+        metadata = ticker.history_metadata
+        exchanges = {'Nasdaq': {'NMS','NGM','NCM'}, 'NYSE': {'NYQ'},
+                     'NYSE American': {'ASE'}, 'NYSE Arca': {'PCX'}, 'Cboe BZX': {'BTS','BATS'},
+                     'KOSPI': {'KSC'}, 'KOSDAQ': {'KOE'}}
+        if (metadata.get('currency') != item['currency'] or
+                metadata.get('symbol','').upper() != item['provider_symbol'] or
+                metadata.get('exchangeName') not in exchanges.get(item['exchange'], set()) or
+                metadata.get('instrumentType') != ('ETF' if item['security_type']=='ETF' else 'EQUITY')):
+            raise ValueError('Quote identity, exchange, type or currency mismatch')
         rows = [(index.date(), row['Close']) for index, row in history.iterrows() if index.date() < today]
         if not rows:
             raise ValueError('No completed close')
@@ -72,6 +81,11 @@ def fetch_price(market, symbol):
         observed = datetime(day.year, day.month, day.day, 16 if market == 'us' else 15, 0 if market == 'us' else 30, tzinfo=local_zone)
         price = Price(minor(value), minor(rows[-2][1]) if len(rows) > 1 else None, observed.isoformat(), int(time.time()))
         ensure_fresh(price)
+        with _price_cache_lock:
+            _price_cache[key] = (time.monotonic(),price)
+            _price_cache.move_to_end(key)
+            while len(_price_cache)>256:
+                _price_cache.popitem(last=False)
         return price
     except HTTPException:
         raise

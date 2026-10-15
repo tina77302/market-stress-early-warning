@@ -107,14 +107,15 @@ def logout(request: Request, response: Response, user=Depends(auth.protected_wri
 
 
 @router.get('/paper/securities')
-def securities(market: Market, q: str = Query('', max_length=100), user=Depends(auth.current_user)):
-    return {'data': [item for item in prices.SECURITIES if item['market'] == market and q.casefold() in (item['symbol'] + ' ' + item['name']).casefold()]}
+def securities(market: Market, q: str = Query('', max_length=100), limit: int = Query(20, ge=1, le=30), user=Depends(auth.current_user)):
+    from .symbol_master import search
+    return search(market,q,limit)
 
 
 @router.get('/paper/quote')
 def quote(market: Market, symbol: str = Query(max_length=16), user=Depends(auth.current_user)):
     symbol = symbol.strip().upper()
-    prices.security(market, symbol)
+    symbol = prices.security(market, symbol)['symbol']
     price = prices.fetch_price(market, symbol)
     prices.ensure_fresh(price)
     quote_id = str(uuid4())
@@ -148,8 +149,8 @@ def orders(market: Market, response: Response, user=Depends(auth.current_user)):
 
 @router.post('/paper/orders', status_code=201)
 def submit(body: Order, user=Depends(auth.protected_write)):
-    prices.security(body.market, body.symbol)
-    return execute_order(user['id'], body)
+    symbol = prices.security(body.market, body.symbol)['symbol']
+    return execute_order(user['id'], body.model_copy(update={'symbol': symbol}))
 
 
 @router.get('/paper/performance')

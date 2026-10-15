@@ -1,6 +1,6 @@
 export type Market = 'us' | 'korea';
 export interface User { id: number; email: string | null; username?: string | null; role: 'user' | 'admin' }
-export interface Security { market: Market; symbol: string; name: string; currency: string }
+export interface Security { market: Market; symbol: string; ticker: string; name: string; exchange: string; security_type: 'Stock' | 'ETF'; currency: string }
 export interface Quote { id: string; market: Market; symbol: string; price: number; currency: string; observed_at: string; source: string; expires_at: number }
 export interface Position { symbol: string; market: Market; quantity: number; average_cost: number; cost_basis: number; latest_price: number | null; market_value: number | null; unrealized_pnl: number | null; return_pct: number | null; price_observed_at: string | null }
 export interface Portfolio { market: Market; currency: string; starting_cash: number; cash: number; portfolio_value: number | null; realized_pnl: number; unrealized_pnl: number | null; total_return_pct: number | null; today_pnl: number | null; today_pnl_note: string; valuation_complete: boolean; positions: Position[] }
@@ -17,4 +17,9 @@ export async function workspace<T>(path: string, options: { body?: unknown; csrf
 export function value(number: unknown, currency?: string, locale = 'en-US'): string {
   if (typeof number !== 'number' || !Number.isFinite(number)) return 'Unavailable';
   return currency ? new Intl.NumberFormat(locale, { style: 'currency', currency, currencyDisplay: 'narrowSymbol', maximumFractionDigits: currency === 'KRW' ? 0 : 2 }).format(number) : new Intl.NumberFormat(locale, {minimumFractionDigits:2,maximumFractionDigits:2}).format(number);
+}
+
+// Keep persisted execution keys intact; provider suffixes are not display tickers.
+export function displaySymbol(market: Market, symbol: string) {
+  return market === 'korea' ? symbol.replace(/\.(KS|KQ)$/i, '') : symbol;
 }

@@ -3,6 +3,7 @@ const path = require('node:path');
 const assert = require('node:assert/strict');
 const ts = require('typescript');
 const root = path.resolve(__dirname, '..');
+require.extensions['.css'] = () => {}; // Page-local styles are bundled by Next.js.
 require.extensions['.ts'] = (module, file) => module._compile(ts.transpileModule(fs.readFileSync(file,'utf8'), {compilerOptions:{module:ts.ModuleKind.CommonJS,target:ts.ScriptTarget.ES2020,esModuleInterop:true}}).outputText,file);
 const en = require('../src/app/i18n/en.json');
 const ko = require('../src/app/i18n/ko.json');
@@ -259,3 +260,154 @@ for(const language of ['en','ko']) {
  }
 }
 console.log('Account identity: bilingual username/email login, email signup, persisted-role labels and admin-only navigation passed.');
+
+// Risk-aware Paper Trading uses only recorded account fields and independent market semantics.
+const paperComponents=require('../src/app/paper-trading/PortfolioWorkspace.tsx');
+const {MarketRiskPanel}=require('../src/app/paper-trading/MarketRiskPanel.tsx');
+const PaperPage=require('../src/app/paper-trading/page.tsx').default;
+const observed='2026-10-14T08:00:00+00:00';
+const priceObserved='2026-10-13T20:00:00+00:00';
+function paperFixture(market,sign=1,positions=true) {
+ const korea=market==='korea';const unit=korea?1000:1;
+ const pnl=sign*125*unit;
+ return {market,currency:korea?'KRW':'USD',starting_cash:10000*unit,cash:(8000+sign*25)*unit,
+  portfolio_value:(10000+sign*125)*unit,realized_pnl:sign*25*unit,unrealized_pnl:sign*100*unit,
+  total_return_pct:sign*1.25,today_pnl:null,today_pnl_note:'Today’s P&L requires a prior-day recorded valuation.',valuation_complete:true,
+  positions:positions?[{symbol:korea?'005930.KS':'SPY',market,quantity:2,average_cost:1000*unit,latest_price:(1000+sign*50)*unit,
+   market_value:(2000+sign*100)*unit,unrealized_pnl:sign*100*unit,return_pct:sign*5,price_observed_at:priceObserved}]:[]};
+}
+function renderPaper(language,user,market,portfolio,orders=[],performance=[]) {
+ const states=[user,'fixture-csrf',false,market,portfolio,orders,performance,false,'',0];let index=0;
+ React.useState=initial=>{
+  if(initial==='en'||initial==='ko')return useStateBefore(initial);
+  return index<states.length?[states[index++],()=>{}]:useStateBefore(initial);
+ };
+ try{return render(language,PaperPage);}finally{React.useState=useStateBefore;}
+}
+for(const language of ['en','ko']) {
+ const anonymous=renderPaper(language,null,'us',null);
+ assert.ok(anonymous.includes(language==='ko'?'이메일 또는 사용자 ID':'Email or User ID'));
+ assert.ok(!anonymous.includes('class="rw-workspace"'));
+ assert.ok(!anonymous.includes('class="paper-summary"'));
+ for(const market of ['us','korea'])for(const role of ['admin','user'])for(const sign of [-1,1]) {
+  const user={id:role==='admin'?11:22,username:role==='admin'?'admin1':'user1',email:null,role};
+  const portfolio=paperFixture(market,sign);
+  const order={id:1,market,symbol:portfolio.positions[0].symbol,side:sign>0?'BUY':'SELL',quantity:2,execution_price:1000*(market==='us'?1:1000),realized_pnl:portfolio.realized_pnl,executed_at:observed,price_observed_at:priceObserved};
+  const history=[{observed_at:observed,value:portfolio.portfolio_value,cash:portfolio.cash}];
+  const before=JSON.stringify({portfolio,order,history});
+  const markup=renderPaper(language,user,market,portfolio,[order],history);
+  assert.ok(markup.includes(user.username),'Literal usernames remain verbatim');
+  assert.ok(!markup.includes('관리자 1'));
+  assert.ok(!markup.includes('href="/admin"'),'No role-based portfolio overrides');
+  for(const amount of [portfolio.portfolio_value,portfolio.cash,portfolio.portfolio_value-portfolio.starting_cash,portfolio.portfolio_value-portfolio.cash]) {
+   assert.ok(markup.includes(require('../src/app/paper-trading/types.ts').value(amount,portfolio.currency,language==='ko'?'ko-KR':'en-US')));
+  }
+  assert.ok(markup.includes(sign>0?'paper-gain':'paper-loss'));
+  assert.ok(markup.includes(sign>0?'1.25%':'-1.25%'));
+  assert.ok(markup.includes(require('../src/app/paper-trading/types.ts').displaySymbol(market,portfolio.positions[0].symbol)));
+  assert.ok(markup.includes(language==='ko'?'실제 자금 사용 없음':'NO REAL MONEY'));
+  assert.ok(markup.includes(language==='ko'?'아직 제공되지 않음':'NOT YET AVAILABLE'));
+  assert.equal((markup.match(/aria-disabled="true"/g)||[]).length,4);
+  assert.ok(markup.indexOf('class="paper-summary"')<markup.indexOf('rw-analytics-grid'));
+  assert.ok(markup.includes('command-market-status') && markup.includes('command-trade-rail'));
+  const catalog=language==='ko'?ko:en;
+  assert.ok(markup.includes(catalog.command_motto));
+  assert.ok(markup.includes(catalog.command_intelligence));
+  assert.ok(markup.includes(catalog.command_overlay));
+  assert.ok(markup.indexOf(catalog.rw_available_cash)<markup.indexOf(catalog.rw_invested_value));
+  assert.ok(markup.indexOf(catalog.rw_invested_value)<markup.indexOf(catalog.rw_total_pnl.replaceAll('&','&amp;')));
+  assert.ok(markup.indexOf('command-order-context')<markup.indexOf(catalog.review_simulated_order_fd4ef9));
+  assert.ok(markup.indexOf('paper-holdings')<markup.indexOf('trade-ticket'));
+  assert.ok(markup.indexOf('trade-ticket')<markup.indexOf('rw-activity'));
+  assert.ok(markup.includes('step="1"')&&markup.includes('max="1000000"'));
+  assert.equal(JSON.stringify({portfolio,order,history}),before,'Presentation changed source data');
+ }
+ for(const market of ['us','korea']) {
+  const user={id:22,username:'user1',email:null,role:'user'};
+  const empty={...paperFixture(market,0,false),cash:10000*(market==='us'?1:1000)};
+  const markup=renderPaper(language,user,market,empty);
+  assert.ok(markup.includes(language==='ko'?'이 계좌에 보유한 종목이 없습니다':'No positions in this account'));
+  assert.ok(markup.includes((language==='ko'?ko:en).additional_visits_and_fills_record_actual_observations_no_histori_7c82f9));
+  const incomplete={...paperFixture(market),valuation_complete:false,portfolio_value:null,unrealized_pnl:null,total_return_pct:null};
+  const summary=render(language,paperComponents.PortfolioSummary,{portfolio:incomplete,currency:incomplete.currency});
+  assert.ok(summary.includes(language==='ko'?'조회 불가':'Unavailable'));
+ }
+ for(const status of ['CURRENT','DELAYED','STALE','PARTIAL','ERROR']) {
+  for(const market of ['us','korea']) {
+   const latest={...(market==='us'?usFixture:koreaFixture),data_health:{status,is_current:status==='CURRENT',model_available:true,input_series:[]}};
+   const markup=render(language,MarketRiskPanel,{market,latest});
+   assert.ok(markup.includes(market==='us'?'11.9':'37.8'));
+   assert.ok(markup.includes(language==='ko'?'개별 종목의 기대수익률을 예측하지 않습니다':'not the expected return of an individual security'));
+   if(market==='korea')assert.ok(markup.includes(language==='ko'?translateText('ko','BELOW WARNING'):'BELOW WARNING'));
+  }
+ }
+ for (const market of ['us','korea']) {
+  const latest=market==='us'?usFixture:koreaFixture;
+  const compact=render(language,MarketRiskPanel,{market,latest,compact:true});
+  assert.ok(compact.includes('rw-risk-compact'));
+  assert.ok(compact.includes(latest.last_updated));
+  assert.ok(compact.includes(market==='us'?'11.9':'37.8'));
+  assert.ok(!compact.includes('rw-text-link'));
+ }
+ const unavailable=render(language,MarketRiskPanel,{market:'us',latest:null});
+ assert.ok(!unavailable.includes('undefined'));
+}
+console.log('Risk-aware Paper Trading: anonymous/admin1/user1, USD/KRW, gains/losses, empty/incomplete accounts, recorded data, future modules and five model-freshness states passed in both languages.');
+
+// Ticket presentation retains completed-close evidence, review and safe pending-order controls.
+const Ticket=require('../src/app/paper-trading/TradeTicket.tsx').default;
+for(const language of ['en','ko'])for(const market of ['us','korea'])for(const reviewing of [false,true]) {
+ const portfolio=paperFixture(market);const symbol=portfolio.positions[0].symbol;
+ const quote={id:'fixture-quote',market,symbol,price:portfolio.positions[0].latest_price,currency:portfolio.currency,
+  observed_at:priceObserved,source:'Fixture completed close',expires_at:Math.floor(Date.now()/1000)+120};
+ const review=reviewing?{market,symbol,side:'BUY',quantity:2,quote_id:quote.id,request_key:'fixture-request'}:null;
+ const selected={market,symbol,ticker:require('../src/app/paper-trading/types.ts').displaySymbol(market,symbol),name:symbol,exchange:market==='us'?'NYSE Arca':'KOSPI',security_type:'ETF',currency:portfolio.currency};
+ const states=[selected,symbol,'BUY','2',quote,review,false,'',''];let index=0;
+ React.useState=initial=>{
+  if(initial==='en'||initial==='ko')return useStateBefore(initial);
+  return index<states.length?[states[index++],()=>{}]:useStateBefore(initial);
+ };
+ try {
+  const markup=render(language,Ticket,{market,portfolio,csrf:'fixture-csrf',userId:22,onExecuted:()=>{}});
+  assert.ok(markup.includes(symbol));
+  assert.ok(markup.includes('Fixture completed close'));
+  assert.ok(markup.includes(require('../src/app/paper-trading/types.ts').value(quote.price*2,portfolio.currency,language==='ko'?'ko-KR':'en-US')));
+  assert.ok(markup.includes(language==='ko'?'모의 주문':'SIMULATED ORDER'));
+  if(reviewing) {
+   assert.ok(markup.includes(language==='ko'?translateText('ko','Submit paper trade'):'Submit paper trade'));
+   assert.ok(markup.includes(translateText(language,'Cancel review')));
+  } else assert.ok(markup.includes(translateText(language,'Review simulated order')));
+ } finally {React.useState=useStateBefore;}
+}
+console.log('Paper order ticket: USD/KRW quote evidence, estimated value and review/submit/cancel presentation passed in Korean and English.');
+
+// Discovery stays market-scoped, neutral, bounded and separate from quote approval.
+const {SearchResults}=require('../src/app/paper-trading/SecurityPicker.tsx');
+const Picker=require('../src/app/paper-trading/SecurityPicker.tsx').default;
+for(const language of ['en','ko'])for(const market of ['us','korea']) {
+ const items=market==='us'?[
+  {symbol:'NVDA',ticker:'NVDA',name:'NVIDIA Corporation',exchange:'Nasdaq',market,currency:'USD',security_type:'Stock'},
+  {symbol:'VOO',ticker:'VOO',name:'Vanguard S&P 500 ETF',exchange:'NYSE Arca',market,currency:'USD',security_type:'ETF'}
+ ]:[
+  {symbol:'005930.KS',ticker:'005930',name:'삼성전자',exchange:'KOSPI',market,currency:'KRW',security_type:'Stock'},
+  {symbol:'069500.KS',ticker:'069500',name:'KODEX 200',exchange:'KOSPI',market,currency:'KRW',security_type:'ETF'}
+ ];
+ const results=render(language,SearchResults,{items,active:0,listId:'fixture-list',onSelect:()=>{},onActive:()=>{}});
+ assert.ok(results.includes('role="listbox"'));
+ assert.equal((results.match(/role="option"/g)||[]).length,2);
+ assert.ok(results.includes('aria-selected="true"'));
+ for(const item of items)for(const text of [item.ticker,item.name,item.exchange])assert.ok(results.includes(text.replace(/&/g,'&amp;')));
+ assert.ok(!results.includes('.KS'));
+ assert.ok(results.includes(language==='ko'?'주식':'Stock'));
+ assert.ok(results.includes('ETF'));
+ for(const disabled of [false,true]) {
+  const picker=render(language,Picker,{market,disabled,onSelect:()=>{},onSearchStart:()=>{}});
+  assert.ok(picker.includes('role="combobox"'));
+  assert.ok(picker.includes('aria-autocomplete="list"'));
+  assert.ok(picker.includes(language==='ko'?'종목명 또는 티커 검색':'Search by company name or ticker'));
+  assert.ok(picker.includes('maxLength="100"'));
+  assert.equal(/<input[^>]*disabled=""/.test(picker),disabled);
+  assert.ok(!picker.includes('<select'));
+ }
+}
+console.log('Security discovery: bilingual market/type metadata, canonical Korean tickers, combobox/listbox semantics and disabled order-review state passed.');
