@@ -59,6 +59,24 @@ class WalkForwardValidator:
         target_col = "Target_10D"
 
         # --------------------------------------------------
+        # 0. Drop rows with an unknown forward label
+        #
+        # targets.py keeps the trailing rows whose 10-day
+        # forward window is not yet observable as NaN.
+        # They cannot be used for training or evaluation.
+        # --------------------------------------------------
+
+        before_label_filter = len(df)
+
+        df = df.dropna(subset=[target_col]).copy()
+        df[target_col] = df[target_col].astype(int)
+
+        logger.info(
+            f"Dropped {before_label_filter - len(df)} rows "
+            f"with unknown {target_col}."
+        )
+
+        # --------------------------------------------------
         # 1. ML Feature Whitelist
         # --------------------------------------------------
 

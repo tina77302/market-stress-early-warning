@@ -614,6 +614,21 @@ A long-history credit proxy was used so that validation could include major hist
 
 # 19. Local Development
 
+## Docker Compose
+
+```bash
+docker compose up -d --build
+```
+
+Dashboard: `http://localhost:3000`. API health: `http://localhost:8000/health`.
+The `data/` and `models/` directories are mounted from the host; generate the
+required datasets and model artifacts using the pipeline below before using
+data endpoints. Container startup does not run training automatically.
+
+When accessing the dashboard from another computer, set
+`NEXT_PUBLIC_API_URL=http://<server-address>:8000` in `.env` and rebuild.
+This URL is embedded during the frontend build and must be reachable by the browser.
+
 ## Backend
 
 ```bash

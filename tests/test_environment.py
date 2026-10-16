@@ -26,7 +26,7 @@ def test_xgboost_smoke():
     X = np.random.rand(10, 5)
     y = np.random.randint(2, size=10)
     
-    model = xgb.XGBClassifier(n_estimators=2, max_depth=2, use_label_encoder=False, eval_metric='logloss')
+    model = xgb.XGBClassifier(n_estimators=2, max_depth=2, eval_metric='logloss')
     model.fit(X, y)
     
     preds = model.predict(X)
