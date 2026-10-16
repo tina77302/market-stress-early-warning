@@ -59,3 +59,7 @@ Thumbs.db
 # Private deployment bundles/backups
 *.staging.tar.gz
 /deploy/private/
+
+# CLI batch logs / reports (generated every run)
+cli/logs/
+cli/reports/
