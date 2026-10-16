@@ -41,3 +41,7 @@ notebooks/*.ipynb
 .DS_Store
 Thumbs.db
 .venv/
+
+# CLI batch logs / reports (generated every run)
+cli/logs/
+cli/reports/
