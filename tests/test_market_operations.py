@@ -477,7 +477,7 @@ from src.operations import refresh,store
 from src.config import MODELS_DIR
 stage=store.root()/'staging'/'korea-test';stage.mkdir(parents=True)
 frames=refresh.legacy('korea')
-refresh.stage_inputs('korea',stage,frames,[],'legacy-cache','2026-10-14')
+refresh.stage_inputs('korea',stage,frames,[],'legacy-cache','2026-10-15')
 # No processed research target directory exists in this isolated runtime root.
 os.environ['MARKET_DATA_ROOT']=str(stage.parent/'missing-research-cache')
 from src.api import main as api

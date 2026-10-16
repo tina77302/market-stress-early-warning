@@ -6,6 +6,11 @@ import pandas as pd
 import requests
 from dotenv import load_dotenv
 
+try:
+    from .ingestion import configure, sessions, resume_date as next_resume_date, atomic_csv, receipt
+except ImportError:
+    from ingestion import configure, sessions, resume_date as next_resume_date, atomic_csv, receipt
+
 
 # ============================================================
 # Configuration
@@ -21,7 +26,7 @@ if not API_KEY:
 URL = "http://data-dbg.krx.co.kr/svc/apis/idx/drvprod_dd_trd"
 
 START_DATE = datetime(2010, 1, 4)
-END_DATE = datetime(2026, 10, 2)
+END_DATE = None  # resolved at main()
 
 OUTPUT_PATH = "data/raw/korea/vkospi.csv"
 
@@ -174,11 +179,7 @@ def save_checkpoint(existing_df, new_rows):
         exist_ok=True,
     )
 
-    df.to_csv(
-        OUTPUT_PATH,
-        index=False,
-        encoding="utf-8-sig",
-    )
+    atomic_csv(df, OUTPUT_PATH)
 
     return df
 
@@ -220,10 +221,10 @@ def load_existing_data():
 
         print()
 
-        return pd.DataFrame(), START_DATE
+        return df, START_DATE
 
     last_date = df["Date"].max()
-    resume_date = last_date + timedelta(days=1)
+    resume_date = next_resume_date(df.loc[df.Close.notna(), "Date"], START_DATE, END_DATE)
 
     print()
     print("=" * 60)
@@ -314,7 +315,14 @@ def print_final_qa(df, failed_dates):
 
 def main():
 
+    global START_DATE, END_DATE, OUTPUT_PATH
+    args = configure()
+    START_DATE, END_DATE = args.start, args.end
+    OUTPUT_PATH = str(args.raw / "vkospi.csv")
+
     existing_df, current_date = load_existing_data()
+    if not existing_df.empty:
+        receipt(OUTPUT_PATH, "VKOSPI", existing_df, origin="LOCAL_BASELINE_READ")
 
     new_rows = []
 
@@ -344,10 +352,12 @@ def main():
 
         return
 
+    completed_dates = existing_df.loc[existing_df.Close.notna(), "Date"] if not existing_df.empty else []
+    eligible_sessions = set(sessions(START_DATE, END_DATE).difference(pd.DatetimeIndex(completed_dates)))
     while current_date <= END_DATE:
 
         # Saturday / Sunday
-        if current_date.weekday() < 5:
+        if pd.Timestamp(current_date) in eligible_sessions:
 
             raw_rows = fetch_krx_date(
                 current_date
@@ -367,7 +377,8 @@ def main():
                     raw_rows
                 )
 
-                if parsed is not None:
+                if parsed is not None and pd.Timestamp(parsed["Date"]).normalize() == pd.Timestamp(current_date):
+                    receipt(OUTPUT_PATH, "VKOSPI", pd.DataFrame([parsed]))
 
                     new_rows.append(parsed)
                     collected_count += 1
@@ -412,6 +423,8 @@ def main():
         final_df,
         failed_dates,
     )
+    if failed_dates:
+        raise RuntimeError("Ingestion incomplete; failed sessions will be retried")
 
 
 if __name__ == "__main__":

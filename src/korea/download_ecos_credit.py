@@ -5,6 +5,11 @@ import pandas as pd
 import requests
 from dotenv import load_dotenv
 
+try:
+    from .ingestion import configure, sessions, resume_date as next_resume_date, atomic_csv, receipt
+except ImportError:
+    from ingestion import configure, sessions, resume_date as next_resume_date, atomic_csv, receipt
+
 
 # ============================================================
 # Configuration
@@ -24,7 +29,7 @@ STAT_CODE = "817Y002"
 FREQUENCY = "D"
 
 START_DATE = "20100104"
-END_DATE = "20261002"
+END_DATE = None  # resolved at main(), never frozen at import
 
 SERIES = {
     "Korea_Treasury_3Y": "010200000",
@@ -98,6 +103,8 @@ def fetch_series(series_name, item_code):
 
                 result = data["RESULT"]
 
+                if result.get("CODE") == "INFO-200":
+                    return pd.DataFrame({"Date": pd.Series(dtype="datetime64[ns]"), series_name: pd.Series(dtype=float)})
                 raise RuntimeError(
                     f"ECOS API Error: "
                     f"{result.get('CODE')} | "
@@ -136,9 +143,7 @@ def fetch_series(series_name, item_code):
             df = pd.DataFrame(parsed)
 
             if df.empty:
-                raise RuntimeError(
-                    f"No data returned: {series_name}"
-                )
+                return pd.DataFrame({"Date": pd.Series(dtype="datetime64[ns]"), series_name: pd.Series(dtype=float)})
 
             df["Date"] = pd.to_datetime(
                 df["Date"],
@@ -154,6 +159,8 @@ def fetch_series(series_name, item_code):
                 .reset_index(drop=True)
             )
 
+            df = df.loc[df.Date.between(pd.Timestamp(START_DATE), pd.Timestamp(END_DATE))]
+            receipt(OUTPUT_PATH, series_name, df)
             return df
 
         except (
@@ -163,7 +170,7 @@ def fetch_series(series_name, item_code):
 
             print(
                 f"[WARNING] {series_name}: "
-                f"{exc}"
+                f"{type(exc).__name__}"
             )
 
             if attempt < MAX_RETRIES:
@@ -368,6 +375,11 @@ def run_qa(raw_credit, aligned_credit, calendar):
 
 def main():
 
+    global START_DATE, END_DATE, OUTPUT_PATH, KRX_PATH
+    args = configure()
+    START_DATE, END_DATE = args.start.strftime("%Y%m%d"), args.end.strftime("%Y%m%d")
+    OUTPUT_PATH, KRX_PATH = str(args.raw / "ecos_credit.csv"), str(args.raw / "krx_indices.csv")
+
     print("=" * 60)
     print("BOK ECOS Korea Credit Data Download")
     print("=" * 60)
@@ -404,6 +416,10 @@ def main():
     # --------------------------------------------------------
     # Merge ECOS series
     # --------------------------------------------------------
+
+    if treasury.empty and corporate.empty:
+        print("No new ECOS observations; existing files preserved.")
+        return
 
     credit = pd.merge(
         treasury,
@@ -501,11 +517,17 @@ def main():
         exist_ok=True,
     )
 
-    aligned.to_csv(
-        OUTPUT_PATH,
-        index=False,
-        encoding="utf-8-sig",
-    )
+    # Preserve older observations if a bounded/no-new-data response is returned.
+    if os.path.exists(OUTPUT_PATH):
+        old = pd.read_csv(OUTPUT_PATH, parse_dates=["Date"]).set_index("Date")
+        aligned = aligned.set_index("Date").combine_first(old).sort_index().reset_index()
+    aligned["Korea_Credit_Spread"] = aligned["Korea_Corporate_AAminus_3Y"] - aligned["Korea_Treasury_3Y"]
+    aligned["Korea_Credit_Spread_bp"] = aligned["Korea_Credit_Spread"] * 100
+    atomic_csv(aligned, OUTPUT_PATH)
+    unaligned_path = args.raw / "ecos_credit_unaligned.csv"
+    if unaligned_path.exists():
+        credit = credit.set_index("Date").combine_first(pd.read_csv(unaligned_path, parse_dates=["Date"]).set_index("Date")).sort_index().reset_index()
+    atomic_csv(credit, unaligned_path)
 
     print()
     print("=" * 60)

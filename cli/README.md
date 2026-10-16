@@ -508,8 +508,42 @@ LOG_RETENTION_DAYS=30 cli/batch_fetch_korea_data.sh
 
 ### 주의 사항
 
-- **수집 종료일이 고정되어 있습니다.** `src/korea/download_*.py` 의 `END_DATE` 가 `2026-10-02` 로 하드코딩되어 있어, 전체 다운로드가 끝난 뒤의 30분 배치는 "already up to date" 로 끝나고 새 데이터를 받지 않습니다. 이후 날짜를 계속 받으려면 각 스크립트의 `END_DATE` 를 `datetime.today()` 등으로 바꿔야 합니다.
+- **수집 종료일은 실행 시 결정됩니다.** 서울 시간 기준 장 마감 후 완료된 XKRX 거래일까지 수집합니다. `--end-date` 또는 `KOREA_END_DATE`로 과거 종료일을 지정할 수 있습니다. 연결 테스트의 고정 날짜는 수집 종료일과 별개입니다.
 - **첫 실행은 오래 걸립니다.** krx / vkospi 각각 약 4,400 요청(15분 이상), ecos 는 시리즈별 수 회 요청입니다. 그동안 돌아오는 30분 주기는 SKIPPED 로 기록됩니다.
 - **cron 은 PATH 가 최소입니다.** 배치는 프로젝트 루트의 `.venv/bin/python` 을 절대경로로 찾으므로 `.venv` 가 있어야 합니다. 다른 Python 을 쓰려면 crontab 줄에 `PYTHON=/path/bin/python` 을 추가하세요.
 - **WSL2 는 부팅 시 cron 이 꺼져 있을 수 있습니다.** `sudo service cron start` 로 켜거나, `/etc/wsl.conf` 에 `[boot] command="service cron start"` 를 넣거나, `schedule_batch.sh loop` 를 사용하세요.
 - `cli/logs/` 와 `cli/reports/` 는 `.gitignore` 에 등록되어 있습니다. 리포트를 git 으로 추적하려면 `.gitignore` 에서 `cli/reports/` 줄을 제거하세요.
+
+
+### Freshness / point-in-time update
+
+The instructor command structure is preserved. Active ingestion now defaults to the latest completed Korean session (Asia/Seoul, calendar close, normally15:30), using exchange holidays. Empty provider responses do not create synthetic observations; a calendar can still disagree with an exceptional closure, so absence remains absence. Missing sessions are retried without re-fetching the entire successful tail. Partial existing files are retained while older gaps are backfilled. No model or production warning threshold changes.
+
+```bash
+# One-time current ingestion, no scheduler installation
+cli/fetch_korea_data.sh all
+# Explicit historical range (provider revisions remain possible) in SEPARATE storage; no truncation of newer existing files
+cli/fetch_korea_data.sh all --end-date 2026-10-02 --data-root /tmp/korea-historical/data
+# Batch-compatible equivalent configuration
+KOREA_END_DATE=2026-10-02 MARKET_DATA_ROOT=/tmp/korea-historical/data cli/batch_fetch_korea_data.sh
+```
+
+`--start-date` / `KOREA_START_DATE` defaults to 2010-01-04. `MARKET_DATA_ROOT` also isolates output for ingestion. An explicit range limits requests, not deletion of newer checkpoints already on disk. Use a dedicated root for reproducible historical exports. Connectivity tests retain their fixed October 2 test fixtures and do not certify current freshness.
+
+Atomic CSV replacement protects checkpoints. Raw numerical columns remain compatible with the original builders, without forward filling. Additional `raw/korea/receipts/*.json` records preserve actual retrieval/first-seen evidence and unknown publication times; existing local baselines are explicitly labeled `LOCAL_BASELINE_READ`, not retrospectively claimed as historical provider availability. `ecos_credit_unaligned.csv` preserves ECOS-only dates independently of the KOSPI calendar.
+
+Opt-in shadow diagnostics (never called by production API or the batch):
+
+```bash
+python -m src.korea.shadow_pipeline \
+  --data-root data --output /tmp/korea-shadow \
+  --information-cutoff '<actual-UTC-cutoff-with-offset>'
+```
+
+The cutoff must be in the past and inputs must have real receipts by that cutoff. `--allow-observation-date-proxy` explicitly allows unknown historical availability for research only. Default shadow AS-OF age caps are **1 trading session and 4 calendar days**, configurable with `--max-staleness-trading-days` and `--max-staleness-calendar-days`; these are data-age limits, not model thresholds or empirically proven optimal settings. Both Treasury/corporate dates are preserved. Newer data remain in metadata even when V1 uses an older complete common row. Mixed-date scores are unvalidated experimental replays, never replacement V1 forecasts.
+
+The separate `shadow_history.sqlite3` has append-only forecast/attempt tables and write-protection triggers. Identical cutoff/model/input retries reference the same forecast with another attempt; later forecasts never overwrite earlier forecasts. Only existing 10D output is available here; unsupported horizons remain null. No production WATCH, new warning policy, API/UI changes, push, deployment or cron installation is performed.
+
+Before enabling `cli/schedule_batch.sh install`, require successful one-time ingestion, verified latest dates and retained legs, passing focused tests, and an operator review of batch paths/logs/locks/API quotas and exceptional-calendar no-observation handling. A zero exit or HTTP200 alone does not prove every source is current. Keep ingestion scheduling separate from shadow scoring and production forecast publication. See `docs/korea-freshness-pipeline.md`.
+
+Input/source-axis metadata and successful feature/MSI artifacts are additionally archived under content-addressed `artifacts/<input_sha256>/` directories; conflicting writes fail. Forecast history references these hashes. Later working CSVs may change, but issued input snapshots are not replaced. Exact historical reproduction requires these archived vintages, not only an end-date parameter.

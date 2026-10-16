@@ -6,6 +6,11 @@ import pandas as pd
 import requests
 from dotenv import load_dotenv
 
+try:
+    from .ingestion import configure, sessions, resume_date as next_resume_date, atomic_csv, receipt
+except ImportError:
+    from ingestion import configure, sessions, resume_date as next_resume_date, atomic_csv, receipt
+
 
 # ============================================================
 # Configuration
@@ -21,7 +26,7 @@ if not API_KEY:
 URL = "http://data-dbg.krx.co.kr/svc/apis/idx/kospi_dd_trd"
 
 START_DATE = datetime(2010, 1, 4)
-END_DATE = datetime(2026, 10, 2)
+END_DATE = None  # resolved at main()
 
 OUTPUT_PATH = "data/raw/korea/krx_indices.csv"
 
@@ -196,11 +201,7 @@ def save_checkpoint(existing_df, new_rows):
         exist_ok=True,
     )
 
-    df.to_csv(
-        OUTPUT_PATH,
-        index=False,
-        encoding="utf-8-sig",
-    )
+    atomic_csv(df, OUTPUT_PATH)
 
     return df
 
@@ -244,13 +245,13 @@ def load_existing_data():
         )
 
         print(
-            "The old QA file will be replaced "
-            "by the full download."
+            "Existing rows will be preserved "
+            "during historical backfill."
         )
 
         print()
 
-        return pd.DataFrame(), START_DATE
+        return df, START_DATE
 
     # --------------------------------------------------------
     # 정상적인 장기 데이터라면 이어받기
@@ -258,7 +259,8 @@ def load_existing_data():
 
     last_date = df["Date"].max()
 
-    resume_date = last_date + timedelta(days=1)
+    complete = df.loc[df.Close.notna()].groupby("Date")["Index"].nunique()
+    resume_date = next_resume_date(complete.index[complete >= 2], START_DATE, END_DATE)
 
     print()
     print("=" * 60)
@@ -371,7 +373,14 @@ def print_final_qa(df):
 
 def main():
 
+    global START_DATE, END_DATE, OUTPUT_PATH
+    args = configure()
+    START_DATE, END_DATE = args.start, args.end
+    OUTPUT_PATH = str(args.raw / "krx_indices.csv")
+
     existing_df, current_date = load_existing_data()
+    if not existing_df.empty:
+        receipt(OUTPUT_PATH, "KRX_indices", existing_df, origin="LOCAL_BASELINE_READ")
 
     new_rows = []
 
@@ -411,10 +420,14 @@ def main():
 
         return
 
+    completed = (existing_df.loc[existing_df.Close.notna()].groupby("Date")["Index"].nunique()
+                 if not existing_df.empty else pd.Series(dtype=int))
+    completed_dates = completed.index[completed >= 2]
+    eligible_sessions = set(sessions(START_DATE, END_DATE).difference(pd.DatetimeIndex(completed_dates)))
     while current_date <= END_DATE:
 
         # 토요일 / 일요일 제외
-        if current_date.weekday() < 5:
+        if pd.Timestamp(current_date) in eligible_sessions:
 
             raw_rows = fetch_krx_date(
                 current_date
@@ -433,7 +446,9 @@ def main():
 
                 parsed = parse_rows(raw_rows)
 
+                parsed = [r for r in parsed if pd.Timestamp(r["Date"]).normalize() == pd.Timestamp(current_date)]
                 if parsed:
+                    receipt(OUTPUT_PATH, "KRX_indices", pd.DataFrame(parsed))
 
                     new_rows.extend(parsed)
 
@@ -504,6 +519,8 @@ def main():
     # ========================================================
 
     print_final_qa(final_df)
+    if failed_dates:
+        raise RuntimeError("Ingestion incomplete; failed sessions will be retried")
 
 
 if __name__ == "__main__":

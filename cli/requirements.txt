@@ -16,3 +16,6 @@ plotly>=5.20.0
 python-dotenv>=1.0.0
 pytest>=8.0.0
 shap>=0.46.0
+
+# Completed XKRX sessions for dynamic ingestion bounds
+exchange-calendars>=4.13,<5

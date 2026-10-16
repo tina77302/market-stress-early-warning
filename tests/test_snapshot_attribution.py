@@ -28,7 +28,7 @@ def capture(model,row,**kwargs):
     return original_explain(model,row,**kwargs)
 attribution.explain=capture
 stage=store.root()/'staging'/'test';stage.mkdir(parents=True)
-spec=refresh.stage_inputs(market,stage,refresh.legacy(market),[],'legacy-cache','2026-10-14')
+spec=refresh.stage_inputs(market,stage,refresh.legacy(market),[],'legacy-cache','2026-10-15')
 build(market,stage)
 payload=json.loads((stage/'snapshot.json').read_text())
 assert len(seen)==1 and len(seen[0])==1

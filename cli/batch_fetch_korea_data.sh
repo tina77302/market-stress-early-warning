@@ -40,9 +40,9 @@ BATCH_COMMANDS="${BATCH_COMMANDS:-krx vkospi ecos}"
 
 # 명령 → 출력 CSV 매핑
 declare -A OUTPUT_OF=(
-    [krx]="data/raw/korea/krx_indices.csv"
-    [vkospi]="data/raw/korea/vkospi.csv"
-    [ecos]="data/raw/korea/ecos_credit.csv"
+    [krx]="${MARKET_DATA_ROOT:-${PROJECT_ROOT}/data}/raw/korea/krx_indices.csv"
+    [vkospi]="${MARKET_DATA_ROOT:-${PROJECT_ROOT}/data}/raw/korea/vkospi.csv"
+    [ecos]="${MARKET_DATA_ROOT:-${PROJECT_ROOT}/data}/raw/korea/ecos_credit.csv"
 )
 
 mkdir -p "${LOG_DIR}" "${REPORT_DIR}" "${STATE_DIR}"
@@ -145,7 +145,7 @@ run_one() {
     dur=$(( end - start ))
 
     local summary rows first last size
-    summary=$(csv_summary "${PROJECT_ROOT}/${out}")
+    summary=$(csv_summary "${out}")
     IFS='|' read -r rows first last size <<< "${summary}"
 
     local before added

@@ -107,7 +107,7 @@ run_py() {
     echo "============================================================"
     echo "RUN ${script}"
     echo "============================================================"
-    "${PYTHON}" "${PROJECT_ROOT}/${KOREA_DIR}/${script}"
+    "${PYTHON}" "${PROJECT_ROOT}/${KOREA_DIR}/${script}" "${INGEST_ARGS[@]}"
 }
 
 cmd_krx()         { require_key KRX_API_KEY;  run_py download_krx_indices.py; }
@@ -142,6 +142,8 @@ main() {
     # 스크립트 안의 상대경로(data/raw/korea/...)가 맞도록 프로젝트 루트에서 실행
     cd "${PROJECT_ROOT}"
 
+    shift
+    INGEST_ARGS=("$@")
     load_env
     pick_python
 
