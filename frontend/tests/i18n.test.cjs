@@ -202,7 +202,7 @@ try {
   const cards=factorCards(markup);
   assert.equal(cards.length,3);
   for(const [index,label] of (language==='ko'?['주식 요인','변동성 요인','신용 요인']:['Equity factors','Volatility factors','Credit factors']).entries())assert.ok(cards[index].includes(label));
-  const directions=language==='ko'?['현재 모델 위험 확대 ↑','현재 모델 위험 완화 ↓','현재 모델 위험 기여 중립']:['Model risk contribution: Higher ↑','Model risk contribution: Lower ↓','Model risk contribution: Neutral'];
+  const directions=market==='korea' ? (language==='ko'?['향후 Risk Score를 높이는 방향으로 기여 ↑','향후 Risk Score를 낮추는 방향으로 기여 ↓','향후 Risk Score에 대한 기여 중립']:['Contributes toward a higher forward Risk Score ↑','Contributes toward a lower forward Risk Score ↓','Neutral contribution to the forward Risk Score']) : (language==='ko'?['현재 모델 위험 확대 ↑','현재 모델 위험 완화 ↓','현재 모델 위험 기여 중립']:['Model risk contribution: Higher ↑','Model risk contribution: Lower ↓','Model risk contribution: Neutral']);
   for(const [index,direction] of directions.entries())assert.ok(cards[index].includes(direction));
   for(const [index,feature] of [`${equity} 60D Vol`,`${volatility} 252D ZScore`,'Credit Level'].entries()) {
    assert.ok(cards[index].includes(translateText(language,feature)),feature);
@@ -210,6 +210,16 @@ try {
   }
   assert.ok(markup.includes(language==='ko'?'인과관계를 뜻하지 않습니다':'not causal effects'));
   assert.ok(markup.includes('shap-grid'),'Detailed SHAP evidence remains');
+  if(market==='korea') {
+   for(const copy of ['Operational warning not triggered','Being below the warning threshold does not rule out market shocks.','Stress Event threshold not reached','SHAP explains how inputs contribute to the 10-trading-day Risk Score, not whether the current market is safe.'])assert.ok(markup.includes(translateText(language,copy)),copy);
+   assert.ok(markup.indexOf('research-status-panel') < markup.indexOf('korea-trend-panel'));
+   assert.ok(markup.includes(koreaFixture.last_updated));
+   assert.ok(markup.includes('monitor-hero') && markup.includes('monitor-signal-grid'));
+   assert.ok(markup.includes(`stroke-dasharray="${koreaFixture.risk_score_10d} 100"`),'Gauge preserves API score');
+   assert.ok(markup.includes(translateText(language,'Observed model inputs · not independent alerts')));
+   assert.ok(markup.includes(translateText(language,'Operational warning transitions are not supplied by this API.')));
+   assert.ok(markup.includes(translateText(language,'No validated live industry matrix is available.')));
+  }
   // Reverse every nonzero category to check the opposite directions too.
   fixtures.forEach(d=>{d.shap_value=-d.shap_value;});
   const reversed=factorCards(render(language,MarketDetail,{market}));
@@ -226,6 +236,22 @@ try {
  }
 } finally {marketData.useMarket=originalUseMarket;}
 console.log('U.S./Korea factor cards: bilingual labels, mixed-sign sums, strongest absolute driver, ties, neutral, unavailable and detailed SHAP rendering passed.');
+// Shared console preserves API warning state separately from score bands and MSI.
+const MarketMonitorCard=require('../src/app/components/MarketMonitorCard.tsx').default;
+for(const market of ['us','korea'])for(const language of ['en','ko']) {
+ const latest={...(market==='us'?usFixture:koreaFixture),risk_score_10d:64.2,warning_threshold:50,warning_active:false,market_stress_index:1.05,stress_threshold:1.2,is_stress_event:false,data_health:{status:'STALE',is_current:false,model_available:true,input_series:[]}};
+ const before=JSON.stringify(latest);
+ const markup=render(language,MarketMonitorCard,{market,latest});
+ for(const value of ['64.2','1.050','1.200','50 / 100',latest.last_updated])assert.ok(markup.includes(value),value);
+ assert.ok(markup.includes(translateText(language,'Operational warning not triggered')));
+ assert.ok(markup.includes(translateText(language,'Stress Event threshold not reached')));
+ assert.ok(markup.includes(translateText(language,'Being below the warning threshold does not rule out market shocks.')));
+ assert.equal(JSON.stringify(latest),before);
+ const missing=render(language,MarketMonitorCard,{market,latest:null});
+ assert.ok(!missing.includes('NaN')&&!missing.includes('undefined'));
+}
+console.log('Shared monitoring cards preserve API warning flags, independent MSI thresholds, stale valid values and both languages.');
+
 
 // Username login preserves email signup and displays persisted roles explicitly.
 for(const language of ['en','ko']) {

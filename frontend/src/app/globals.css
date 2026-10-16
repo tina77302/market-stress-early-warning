@@ -565,3 +565,357 @@ html[lang="ko"] .font-mono { font-family: ui-monospace, 'MRI Korean', monospace;
 .detail-page .factor-summary > div { display: block; min-width: 0; width: 100%; }
 .detail-page .factor-summary strong { margin-top: 5px; overflow-wrap: anywhere; }
 .detail-page .factor-summary .factor-influence { margin: 6px 0 0; font-size: 11px; line-height: 1.5; color: #b8cbd9; overflow-wrap: anywhere; }
+
+/* Korea recent market context: descriptive research layer only */
+.recent-market-context {
+  border-style: dashed;
+}
+
+.trajectory-context-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 12px;
+  margin-top: 18px;
+}
+
+.trajectory-context-grid > div {
+  min-width: 0;
+  padding: 16px;
+  border: 1px solid rgba(139, 162, 183, 0.22);
+  border-radius: 12px;
+  background: rgba(11, 26, 39, 0.42);
+}
+
+.trajectory-context-grid span,
+.trajectory-context-grid small {
+  display: block;
+}
+
+.trajectory-context-grid span {
+  color: #8ba2b7;
+  font-size: 12px;
+  margin-bottom: 8px;
+}
+
+.trajectory-context-grid strong {
+  display: block;
+  margin-bottom: 7px;
+  font-size: 15px;
+}
+
+.trajectory-context-grid small {
+  color: #8ba2b7;
+  line-height: 1.45;
+}
+
+@media (max-width: 760px) {
+  .trajectory-context-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+/* Presentation hierarchy: Korea only; production states retain API semantics. */
+.korea-summary { grid-template-columns: minmax(0, 1.2fr) minmax(0, 1fr); }
+.korea-summary .korea-model-metadata { grid-column: 1 / -1; }
+.korea-model-metadata { display: flex; align-items: baseline; flex-wrap: wrap; gap: 8px 24px; }
+.korea-model-metadata p, .korea-model-metadata h2 { margin: 0; }
+.detail-page .interpretation-note { color: #c7d8e5; line-height: 1.65; padding-left: 12px; border-left: 2px solid #8ba2b7; }
+.detail-page .recent-stress-chart { height: 210px; margin-top: 20px; }
+@media (max-width: 760px) {
+  .korea-summary { grid-template-columns: minmax(0, 1fr); }
+  .korea-model-metadata { display: block; }
+  .korea-model-metadata p { margin-top: 8px; }
+}
+
+/* Korea presentation: scoped visual hierarchy, no new warning regimes. */
+.korea-presentation .detail-heading { position: relative; padding: 6px 0 4px; }
+.korea-presentation .detail-heading h1 { font-size: clamp(28px,3.2vw,40px); margin: 8px 0; }
+.korea-presentation .market-subnav { margin-top: 8px; gap: 18px; }
+.korea-presentation .compact-health { align-items: center; gap: 8px 14px; padding: 10px 14px; margin: 0; border: 1px solid #695a354d; border-left: 3px solid #bda36b; border-radius: 8px; font-size: 12px; }
+.korea-presentation .compact-health details { width: auto; margin-left: auto; }
+.korea-presentation .compact-health details[open] { width: 100%; }
+.status-dot { display: inline-block; width: 6px; height: 6px; border-radius: 50%; background: currentColor; flex-shrink: 0; }
+.korea-status-hero { overflow: hidden; border: 1px solid #35577499; border-radius: 16px; background: radial-gradient(ellipse at 0 0,#1b464e40,transparent 65%),linear-gradient(130deg,#112535,#091723); box-shadow: 0 16px 40px #0003; }
+.hero-metric-grid { display: grid; grid-template-columns: 1fr 1fr; }
+.hero-metric { --metric-accent: #7fa7c0; min-width: 0; padding: 26px 30px 20px; position: relative; }
+.hero-metric + .hero-metric { border-left: 1px solid #35577466; }
+.hero-metric::before { content: ''; position: absolute; left: 30px; top: 0; width: 48px; height: 3px; background: var(--metric-accent); border-radius: 0 0 3px 3px; }
+.hero-metric.accent-teal { --metric-accent: #6acbb5; }
+.hero-metric.accent-cyan { --metric-accent: #75bcd4; }
+.hero-metric.accent-red { --metric-accent: #e6858d; }
+.metric-heading { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 10px; }
+.korea-presentation .hero-value { margin: 14px 0 2px; font-size: clamp(48px,6vw,78px); line-height: 1.1; font-weight: 750; letter-spacing: -3px; color: #edf5fa; font-variant-numeric: tabular-nums; }
+.korea-presentation .hero-value small { font-size: 17px; color: #8ea9bc; font-weight: 450; letter-spacing: 0; margin-left: 12px; }
+.metric-subtitle { font-size: 13px; color: #b0c4d3; margin: 4px 0 22px; }
+.metric-gauge { position: relative; height: 6px; background: #243b4b; border-radius: 4px; }
+.gauge-fill { display: block; height: 100%; background: var(--metric-accent); border-radius: inherit; }
+.gauge-threshold { position: absolute; top: -4px; height: 14px; width: 2px; background: #e2c18a; }
+.gauge-labels { display: flex; justify-content: space-between; color: #91a9bb; font-size: 10px; margin-top: 8px; font-variant-numeric: tabular-nums; }
+.gauge-labels span:nth-child(2) { color: #d3bd93; }
+.metric-caption { color: #8ba5b8; font-size: 11px; margin: 14px 0 0; }
+.hero-market-metrics { display: grid; grid-template-columns: repeat(3,minmax(0,1fr)); background: #07131e55; border-top: 1px solid #35577466; padding: 18px 30px; gap: 24px; }
+.hero-market-metrics > div { min-width: 0; }
+.hero-market-metrics > div + div { border-left: 1px solid #35577466; padding-left: 24px; }
+.hero-market-metrics span,.hero-market-metrics small { display: block; color: #8ea8ba; font-size: 11px; }
+.hero-market-metrics strong { display: block; font-size: 24px; font-weight: 600; color: #dbe8f1; margin: 4px 0; font-variant-numeric: tabular-nums; }
+.hero-market-metrics small { font-size: 10px; }
+.hero-footnote { display: flex; align-items: center; flex-wrap: wrap; gap: 8px; padding: 11px 30px; border-top: 1px solid #35577444; color: #92acbf; font-size: 11px; }
+.hero-footnote .status-dot { color: #75bcd4; }
+.hero-footnote a { margin-left: auto; color: #95c7de; }
+.korea-presentation .korea-trend-panel { padding: 24px 26px 16px; }
+.korea-presentation .chart-heading h2,.korea-explanation h2 { font-size: 21px; letter-spacing: -.3px; margin-top: 7px; }
+.korea-presentation .eyebrow { font-size: 10px; letter-spacing: 1.5px; }
+.archive-badge,.research-chip { font-size: 10px; font-weight: 600; letter-spacing: .7px; border: 1px solid #5684a455; border-radius: 5px; color: #8fbad4; padding: 5px 8px; }
+.trend-summary { display: flex; flex-wrap: wrap; gap: 10px 22px; align-items: baseline; margin: 20px 0 8px; }
+.trend-summary strong { color: #bad8e8; font-size: 16px; font-weight: 550; }
+.trend-summary span { font-size: 11px; color: #8da9bd; }
+.trend-summary b { color: #c3d7e5; font-weight: 550; }
+.korea-presentation .presentation-trend-chart { height: 300px; margin: 16px 0 0; }
+.korea-presentation .archive-caption { font-size: 11px; border-top: 1px solid #35577455; padding-top: 10px; }
+.research-status-panel { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 12px 24px; border: 1px solid #8d744633; border-left: 3px solid #b89d67; background: #27271d55; border-radius: 9px; padding: 16px 20px; }
+.research-status-panel > div { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
+.research-status-panel h2 { font-size: 15px; color: #d8cfb7; font-weight: 550; }
+.research-chip { color: #cdb67f; border-color: #8d744655; }
+.research-status-panel p { font-size: 12px; color: #a8a89d; max-width: 520px; line-height: 1.6; }
+.korea-presentation .korea-explanation { border-left: 3px solid #628ca9; padding: 20px 24px; }
+.korea-presentation .korea-explanation p { max-width: 850px; font-size: 13px; margin-top: 8px; }
+.korea-presentation .detail-range { margin-top: 24px; padding-top: 24px; border-top: 1px solid #35577477; }
+.korea-presentation .detail-range h2 { font-size: 17px; }
+.presentation-methodology { color: #8ea8ba; font-size: 12px; line-height: 1.7; padding: 14px 18px; border: 1px solid #35577455; border-radius: 8px; }
+.presentation-methodology summary { cursor: pointer; color: #b0c8da; }
+.presentation-methodology p { margin-top: 10px; max-width: 900px; }
+@media(max-width:760px) {
+  .hero-metric { padding: 22px 20px 18px; }
+  .hero-metric::before { left: 20px; }
+  .metric-heading { align-items: flex-start; flex-direction: column; }
+  .hero-market-metrics { padding: 16px 20px; gap: 12px; }
+  .hero-market-metrics > div + div { padding-left: 12px; }
+  .hero-market-metrics strong { font-size: 20px; }
+  .hero-footnote { padding: 12px 20px; }
+  .korea-presentation .compact-health details { margin-left: 0; }
+  .korea-presentation .health-caption { display: none; }
+}
+@media(max-width:480px) {
+  .hero-metric-grid { grid-template-columns: 1fr; }
+  .hero-metric + .hero-metric { border-left: 0; border-top: 1px solid #35577466; }
+  .metric-heading { flex-direction: row; align-items: center; }
+  .korea-presentation .hero-value { font-size: 58px; }
+  .hero-market-metrics { gap: 8px; }
+  .hero-market-metrics strong { font-size: 18px; }
+  .korea-presentation .korea-trend-panel { padding: 20px 12px 12px; }
+  .korea-presentation .presentation-trend-chart { height: 260px; }
+}
+
+/* Data-backed Korea monitoring console; all accents are presentation only. */
+.korea-presentation .home-content { gap: 12px; padding-top: 18px; max-width: 1660px; }
+.korea-presentation .detail-heading h1 { display: flex; align-items: center; flex-wrap: wrap; gap: 12px; font-size: clamp(19px,2.1vw,28px); letter-spacing: -.4px; margin: 2px 0; }
+.monitor-brand-icon { color: #d4787e; filter: drop-shadow(0 0 7px #d4787e33); }
+.korea-presentation .detail-heading h1 small { color: #83a7c3; font-size: .7em; letter-spacing: 1px; border-left: 1px solid #355774; padding-left: 14px; }
+.korea-presentation .detail-heading .eyebrow { display: none; }
+.korea-presentation .market-subnav { margin-top: 5px; font-size: 11px; }
+.monitor-panel { min-width: 0; border: 1px solid #2a4e65; border-radius: 11px; background: radial-gradient(ellipse at 0 0,#19364c45,transparent 70%),linear-gradient(130deg,#0b1c2a,#081723); padding: 16px 18px; box-shadow: inset 0 1px 0 #b7dfff08,0 8px 22px #0002; }
+.monitor-hero { display: grid; grid-template-columns: minmax(0,1.65fr) minmax(0,1.05fr) minmax(0,.9fr); gap: 12px; }
+.monitor-panel-title { display: flex; align-items: center; gap: 10px; color: #9fc5df; }
+.monitor-panel-title > svg { flex-shrink: 0; color: #bd9b66; }
+.monitor-panel-title h2 { font-size: 14px; font-weight: 650; line-height: 1.5; }
+.monitor-panel-title div > span { display: block; color: #698da9; font-size: 9px; letter-spacing: 1px; margin-top: 3px; }
+.monitor-risk-body { display: grid; grid-template-columns: minmax(0,1.2fr) minmax(0,1fr); align-items: center; gap: 10px; }
+.monitor-dial { position: relative; min-width: 0; }
+.monitor-dial > svg { width: 100%; display: block; }
+.monitor-dial-value { position: absolute; inset: 43% 0 auto; text-align: center; color: #d9eafa; }
+.monitor-dial-value strong { display: block; font-size: clamp(34px,3.6vw,58px); line-height: 1; letter-spacing: -2px; font-variant-numeric: tabular-nums; }
+.monitor-dial-value span { display: block; color: #9fb8cd; font-size: 16px; margin-top: 4px; }
+.monitor-dial > small { display: block; text-align: center; color: #809cb1; font-size: 9px; margin-top: -2px; }
+.monitor-warning-state { border: 1px solid #38536966; background: #172b3d55; border-radius: 9px; padding: 14px 12px; }
+.monitor-label { color: #a5bed0; font-size: 11px; }
+.monitor-warning-state strong { display: block; color: #d9bd8c; font-size: 17px; line-height: 1.4; margin-top: 6px; }
+.monitor-warning-state .red { color: #e68c93; }
+.monitor-threshold { display: block; color: #a4b6c3; font-size: 10px; padding: 8px 0; margin: 5px 0; border-bottom: 1px solid #35577455; }
+.monitor-warning-state p { color: #92afc5; font-size: 10px; line-height: 1.65; }
+.monitor-panel footer { font-size: 10px; color: #7f9bb0; margin-top: 12px; }
+.monitor-msi { --metric-accent: #b78960; }
+.monitor-msi .monitor-panel-title > svg { color: #c28280; }
+.monitor-msi-value { color: #d7ac90; font-size: clamp(38px,4vw,58px); line-height: 1.1; font-weight: 700; margin: 22px 0 6px; font-variant-numeric: tabular-nums; }
+.monitor-msi-value small { font-size: 13px; color: #91abc0; font-weight: 450; margin-left: 9px; }
+.monitor-msi-reference { font-size: 11px; color: #9ab6cb; margin-bottom: 18px; }
+.monitor-msi-reference strong { color: #d4b291; margin-left: 6px; }
+.monitor-msi .metric-gauge { height: 10px; }
+.monitor-msi-state { display: flex; align-items: center; gap: 8px; color: #c9b38c; font-size: 12px; margin-top: 17px; }
+.monitor-warning { border-color: #a85a6666; }
+.monitor-warning .monitor-msi-value,.monitor-warning .monitor-msi-state { color: #e6858f; }
+.monitor-warning.monitor-msi { --metric-accent: #d97d88; }
+.monitor-caption { font-size: 10px; line-height: 1.6; color: #809eb5; margin-top: 10px; }
+.monitor-key-inputs .monitor-panel-title { margin-bottom: 9px; }
+.monitor-input { display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 10px 0; border-top: 1px solid #28475e55; }
+.monitor-input > span { font-size: 11px; color: #abc4d7; }
+.monitor-input small { display: block; font-size: 8px; color: #7893a7; margin-top: 3px; }
+.monitor-input strong { font-size: 15px; color: #dce8f2; font-weight: 600; white-space: nowrap; font-variant-numeric: tabular-nums; }
+.monitor-row-heading { display: flex; align-items: baseline; justify-content: space-between; flex-wrap: wrap; gap: 6px 14px; margin-bottom: 12px; }
+.monitor-row-heading h2 { font-size: 15px; font-weight: 650; color: #c7dded; }
+.monitor-row-heading > span:not(.archive-badge) { font-size: 10px; color: #82a2ba; }
+.monitor-signal-grid { display: grid; grid-template-columns: repeat(4,minmax(0,1fr)); gap: 10px; }
+.monitor-signal-grid > article { min-width: 0; border: 1px solid #2d506555; border-radius: 8px; background: #091b2888; padding: 12px; }
+.monitor-signal-title { display: flex; gap: 9px; align-items: center; color: #8fbad0; }
+.monitor-signal-title > svg { flex-shrink: 0; }
+.monitor-signal-title h3 { font-size: 12px; color: #bbd1e1; font-weight: 600; }
+.monitor-signal-title strong { font-size: 16px; font-weight: 600; color: #d6e1e8; margin-left: auto; white-space: nowrap; }
+.monitor-signal-bottom { display: flex; align-items: end; gap: 8px; margin-top: 12px; }
+.monitor-signal-bottom span { font-size: 9px; line-height: 1.5; color: #7492a9; }
+.monitor-sparkline { width: 45%; height: 34px; flex-shrink: 0; margin-left: auto; color: #bb9c66; }
+.monitor-research-signal .research-chip { display: inline-block; font-size: 8px; margin-top: 10px; }
+.monitor-research-signal small { display: block; color: #8d9b9e; font-size: 9px; margin-top: 5px; }
+.monitor-context-grid { display: grid; grid-template-columns: minmax(0,1.7fr) minmax(0,1fr); gap: 12px; }
+.monitor-context-grid .korea-trend-panel { order: 0; }
+.monitor-context-grid .monitor-industry-research { order: 1; }
+.korea-presentation .korea-trend-panel { padding: 16px 18px 12px; }
+.korea-presentation .chart-heading h2,.korea-explanation h2 { font-size: 16px; }
+.korea-presentation .presentation-trend-chart { height: 230px; margin-top: 8px; }
+.korea-presentation .trend-summary { margin-top: 12px; gap: 7px 18px; }
+.korea-presentation .trend-summary strong { font-size: 12px; }
+.korea-presentation .trend-summary span { font-size: 10px; }
+.korea-presentation .archive-caption { font-size: 9px; margin-top: 4px; }
+.monitor-industry-research { display: block; padding: 16px 18px; background: linear-gradient(140deg,#19272d88,#0b1a25); }
+.monitor-industry-research .monitor-research-header { display: block; }
+.monitor-research-header .research-chip { display: inline-block; font-size: 9px; line-height: 1.5; }
+.monitor-research-header h2 { margin: 13px 0 8px; }
+.monitor-research-pair { display: grid; gap: 12px; }
+.monitor-research-pair > div { border-top: 1px solid #79664444; padding-top: 14px; }
+.monitor-research-pair svg { color: #9b8967; float: left; margin-right: 10px; }
+.monitor-research-pair h3 { color: #c3baa4; font-size: 12px; font-weight: 550; }
+.monitor-research-pair p { font-size: 11px; margin: 8px 0 0; color: #8d9a9e; }
+.monitor-table-scroll { overflow-x: auto; }
+.monitor-timeline table { width: 100%; border-collapse: collapse; text-align: right; font-size: 11px; white-space: nowrap; font-variant-numeric: tabular-nums; }
+.monitor-timeline td,.monitor-timeline th { padding: 9px 10px; border-bottom: 1px solid #29475c55; }
+.monitor-timeline thead th { color: #82a7c1; font-weight: 450; background: #142b3d55; }
+.monitor-timeline tbody th,.monitor-timeline thead th:first-child { text-align: left; font-weight: 450; color: #adc8db; }
+.monitor-timeline tbody td { color: #b4cddd; }
+.monitor-timeline tbody td:last-child { background: #836c3610; color: #d3bc92; }
+.monitor-model-evidence { border: 1px solid #2b495e; border-radius: 9px; padding: 14px 18px; background: #0c1b27; }
+.monitor-model-evidence > summary { cursor: pointer; color: #a1bbce; font-size: 13px; }
+.monitor-model-evidence > summary > span { float: right; color: #728fa5; font-size: 11px; }
+.monitor-model-evidence[open] > section { margin-top: 12px; }
+.us-model-evidence { display: contents; }
+.korea-presentation .korea-explanation { padding: 12px 18px; }
+.korea-presentation .korea-explanation .eyebrow { display: none; }
+.korea-presentation .korea-explanation p { font-size: 11px; }
+@media(max-width:1150px) {
+  .monitor-hero { grid-template-columns: minmax(0,1.3fr) minmax(0,1fr); }
+  .monitor-key-inputs { grid-column: 1/-1; }
+  .monitor-key-inputs > div { display: grid; grid-template-columns: repeat(5,minmax(0,1fr)); gap: 14px; }
+  .monitor-input { align-items: start; flex-direction: column; gap: 6px; }
+  .monitor-signal-grid { grid-template-columns: repeat(2,minmax(0,1fr)); }
+}
+@media(max-width:760px) {
+  .monitor-hero,.monitor-context-grid { grid-template-columns: minmax(0,1fr); }
+  .monitor-key-inputs > div { grid-template-columns: repeat(3,minmax(0,1fr)); }
+  .monitor-context-grid .monitor-industry-research { order: 0; }
+  .monitor-research-pair { grid-template-columns: repeat(2,minmax(0,1fr)); }
+  .monitor-dial { max-width: 300px; }
+  .monitor-dial-value strong { font-size: 52px; }
+}
+@media(max-width:480px) {
+  .monitor-panel { padding: 14px 12px; }
+  .monitor-risk-body { grid-template-columns: minmax(0,1fr); }
+  .monitor-dial { margin: auto; width: 100%; }
+  .monitor-warning-state { padding: 10px 12px; }
+  .monitor-signal-grid,.monitor-key-inputs > div { grid-template-columns: repeat(2,minmax(0,1fr)); }
+  .monitor-signal-title { flex-wrap: wrap; }
+  .monitor-signal-title strong { width: 100%; margin-left: 29px; }
+  .monitor-research-pair { grid-template-columns: minmax(0,1fr); }
+  .monitor-sparkline { display: none; }
+}
+
+/* Shared monitoring language for Overview, validation, comparison and methodology. */
+.overview-console .home-content { padding-top: 22px; display: flex; flex-direction: column; gap: 16px; }
+.overview-console-header { display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 16px; padding-bottom: 4px; }
+.overview-console-header .eyebrow { color: #729bb8; font-size: 10px; letter-spacing: 1.6px; }
+.overview-console-header h1 { color: #d9e7f2; font-size: clamp(20px,2.2vw,30px); letter-spacing: -.5px; font-weight: 700; margin-top: 7px; }
+.overview-console-header p { color: #849fb4; font-size: 12px; margin-top: 8px; }
+.overview-console .market-grid { margin: 0; gap: 16px; }
+.overview-console .monitor-overview-card { padding: 18px 22px; background: radial-gradient(ellipse at 0 0,#24415844,transparent 70%),linear-gradient(130deg,#0e2131,#091723); border: 1px solid #305169; box-shadow: inset 0 1px 0 #9abfd40c,0 12px 28px #0002; }
+.monitor-overview-heading { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 14px; }
+.monitor-overview-heading h2 { display: flex; align-items: center; gap: 9px; color: #c8deee; font-size: 17px; font-weight: 650; }
+.monitor-overview-heading > a { display: inline-flex; align-items: center; gap: 5px; color: #80a9c5; font-size: 11px; }
+.monitor-overview-card .compact-health { display: flex; flex-wrap: wrap; align-items: center; padding: 8px 10px; border-radius: 6px; font-size: 10px; line-height: 1.5; margin: 0; gap: 5px 10px; }
+.monitor-overview-card .compact-health details { width: auto; margin-left: auto; }
+.monitor-overview-card .compact-health details[open] { width: 100%; }
+.monitor-overview-card .compact-health summary { font-size: 10px; }
+.monitor-overview-card .health-caption { display: none; }
+.overview-risk-stress { display: grid; grid-template-columns: 1fr 1fr; gap: 24px; margin: 20px 0 16px; }
+.overview-risk-stress > div { min-width: 0; --metric-accent: #80b9d2; }
+.overview-risk-stress > div:first-child { --metric-accent: #b99c68; }
+.overview-risk-stress > div + div { border-left: 1px solid #35577477; padding-left: 24px; }
+.overview-metric-label { display: flex; align-items: center; gap: 7px; color: #9dbbd0; font-size: 12px; }
+.overview-score { font-size: clamp(38px,4.2vw,64px); line-height: 1.15; font-weight: 700; color: #deebf5; letter-spacing: -2px; margin: 10px 0 4px; font-variant-numeric: tabular-nums; }
+.overview-score small { font-size: 13px; color: #849fb6; letter-spacing: 0; margin-left: 8px; font-weight: 450; }
+.overview-msi { color: #9fc5da; }
+.overview-metric-caption { display: block; font-size: 10px; color: #7e9db3; line-height: 1.6; margin-bottom: 18px; min-height: 16px; }
+.overview-reference { font-size: 10px; color: #a49b85; margin-top: 11px; }
+.overview-operational-state { display: flex; align-items: center; flex-wrap: wrap; gap: 8px; padding: 10px 12px; border: 1px solid #52625755; border-radius: 6px; background: #1d303144; color: #a9bfbd; font-size: 12px; }
+.overview-operational-state strong { font-weight: 550; }
+.overview-operational-state > span:last-child:not(.status-dot) { font-size: 10px; color: #819fb3; margin-left: auto; }
+.overview-stress-state { font-size: 10px; color: #91abc0; margin: 9px 0; }
+.overview-input-strip { display: grid; grid-template-columns: repeat(3,minmax(0,1fr)); gap: 14px; border-top: 1px solid #33506977; padding-top: 12px; margin-top: 12px; }
+.overview-input-strip span { color: #7d9cb4; display: block; font-size: 10px; }
+.overview-input-strip strong { color: #bdd2e1; display: block; font-size: 17px; font-weight: 550; margin-top: 4px; font-variant-numeric: tabular-nums; }
+.overview-evidence-strip { display: flex; align-items: center; flex-wrap: wrap; gap: 8px 18px; border: 1px solid #31506966; border-radius: 8px; padding: 12px 16px; color: #8ca9bf; font-size: 11px; background: #10233366; }
+.overview-evidence-strip > span:first-child { display: flex; align-items: center; gap: 8px; color: #a9c6d9; }
+.overview-evidence-strip a { display: flex; align-items: center; gap: 6px; margin-left: auto; color: #8eb7d1; }
+.overview-console .monitor-industry-research { display: flex; align-items: center; gap: 20px; }
+.overview-console .monitor-research-header { flex: 1; }
+.overview-console .monitor-research-pair { flex: 2; grid-template-columns: 1fr 1fr; }
+.overview-console .monitor-research-pair > div { border-top: 0; border-left: 1px solid #79664444; padding: 0 0 0 16px; }
+.console-disclosure { border: 1px solid #2b495e; border-radius: 8px; padding: 13px 16px; background: #0d1d2a; min-width: 0; }
+.console-disclosure > summary { color: #a0bed3; cursor: pointer; font-size: 12px; }
+.console-disclosure > section { margin-top: 14px; }
+.overview-explainability-note { border-left: 2px solid #67879b; padding: 10px 14px; font-size: 11px; color: #8da8bb; background: #11233166; }
+.overview-console .history-panel,.comparison-console .history-panel { border-color: #2c4a60; border-radius: 10px; }
+.overview-console .history-panel h2,.comparison-console .history-panel h2 { font-size: 15px; }
+.overview-console .history-chart { height: 265px; }
+.overview-console .insights-panel { padding: 16px; }
+.overview-console .insight { padding: 10px 0; }
+.overview-console .insight h3 { font-size: 12px; }
+.overview-console .insight p { font-size: 11px; line-height: 1.6; }
+.product-nav { border-bottom-color: #29485d; background: #081723f2; }
+.product-nav nav { gap: 20px; }
+.product-nav nav a { font-size: 11px; }
+.comparison-console .detail-heading h1,.research-page .detail-heading h1 { font-size: clamp(26px,2.6vw,36px); }
+.comparison-console .home-content { gap: 16px; }
+.research-page .research-section { padding: 22px 0; }
+.research-page .research-section > h2 { font-size: 20px; }
+.research-page .sample-summary { background: #0d2030; border: 1px solid #2c4b61; border-radius: 9px; padding: 16px; }
+.validation-evidence-scope { display: grid; grid-template-columns: minmax(0,1.4fr) minmax(0,1fr); gap: 20px; padding: 20px; border: 1px solid #2c4b61; border-left: 3px solid #719cb9; background: linear-gradient(135deg,#102638,#0b1a28); border-radius: 10px; margin: 6px 0 14px; }
+.validation-evidence-scope h2 { font-size: 17px; margin-top: 11px; color: #c6dbe9; }
+.validation-evidence-scope p { font-size: 12px; color: #8ba9be; line-height: 1.7; margin-top: 7px; }
+.validation-evidence-scope summary { font-size: 12px; color: #c5af84; cursor: pointer; }
+.validation-evidence-scope dl > div { border-top: 1px solid #34516766; padding: 10px 0; margin-top: 8px; }
+.validation-evidence-scope dt { font-size: 11px; color: #adbed0; }
+.validation-evidence-scope dd { font-size: 10px; color: #829db2; margin-top: 4px; }
+.methodology-console .methodology-steps { display: grid; grid-template-columns: repeat(2,minmax(0,1fr)); gap: 14px; }
+.methodology-console .methodology-step { height: 100%; border: 1px solid #2e4d63; border-radius: 10px; padding: 20px; background: linear-gradient(140deg,#102536,#0b1b28); }
+.methodology-console .methodology-step h2 { font-size: 17px; line-height: 1.5; }
+.methodology-console .methodology-step > p { font-size: 12px; line-height: 1.75; color: #9ab4c7; }
+.methodology-console .methodology-step details { margin-top: 12px; }
+@media(max-width:900px) {
+  .overview-console .market-grid { grid-template-columns: 1fr; }
+  .overview-console .monitor-industry-research { display: block; }
+  .overview-console .monitor-research-pair { margin-top: 14px; }
+  .validation-evidence-scope { grid-template-columns: 1fr; }
+}
+@media(max-width:600px) {
+  .overview-console .monitor-overview-card { padding: 16px; }
+  .overview-risk-stress { gap: 14px; }
+  .overview-risk-stress > div + div { padding-left: 14px; }
+  .overview-score { font-size: 37px; }
+  .overview-score small { display: block; margin-left: 0; }
+  .overview-input-strip { gap: 9px; }
+  .overview-input-strip strong { font-size: 14px; }
+  .overview-console .monitor-research-pair,.methodology-console .methodology-steps { grid-template-columns: 1fr; }
+  .monitor-overview-card .compact-health details { margin-left: 0; }
+}
+.overview-header-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 9px; }
+.overview-header-actions button:disabled { opacity: .5; cursor: wait; }
+.overview-input-strip small { display: block; color: #7291a6; font-size: 9px; margin-top: 5px; line-height: 1.5; }
+.detail-page .monitor-overview-card { padding: 20px 24px; background: linear-gradient(130deg,#102637,#0a1b28); border-color: #305169; }
+.risk-home .monitor-overview-card:hover { transform: none; border-color: #3d6078; box-shadow: inset 0 1px 0 #9abfd40c,0 12px 28px #0002; }
+.overview-chart-tabs { margin: 12px 0; justify-content: flex-start; }

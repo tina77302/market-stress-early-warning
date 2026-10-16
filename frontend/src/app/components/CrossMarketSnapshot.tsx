@@ -10,7 +10,10 @@ export function ModelDisclaimer() {
 export default function CrossMarketSnapshot({ us, korea }: { us: Latest | null; korea: Latest | null }) {
   const rows = [
     ['10D Model Score', fmt(modelAvailable(us) ? us?.risk_score_10d : null, 1, ' / 100'), fmt(modelAvailable(korea) ? korea?.risk_score_10d : null, 1, ' / 100')],
-    ['Current Signal', signal('us', us), signal('korea', korea)],
+    ['Existing Model Classification', signal('us', us), signal('korea', korea) === 'BELOW WARNING' ? 'Operational warning not triggered' : signal('korea', korea)],
+    ['Operational Warning', typeof us?.warning_active === 'boolean' ? us.warning_active ? 'WARNING' : 'Operational warning not triggered' : 'Operational warning state unavailable', typeof korea?.warning_active === 'boolean' ? korea.warning_active ? 'WARNING' : 'Operational warning not triggered' : 'Operational warning state unavailable'],
+    ['Stress Event threshold', fmt(us?.stress_threshold, 3), fmt(korea?.stress_threshold, 3)],
+    ['Current Stress Event', typeof us?.is_stress_event === 'boolean' ? us.is_stress_event ? 'YES' : 'Stress Event threshold not reached' : 'Stress Event state unavailable', typeof korea?.is_stress_event === 'boolean' ? korea.is_stress_event ? 'YES' : 'Stress Event threshold not reached' : 'Stress Event state unavailable'],
     ['Stress Index / MSI', fmt(modelAvailable(us) ? us?.market_stress_index : null, 3), fmt(modelAvailable(korea) ? korea?.market_stress_index : null, 3)],
     ['Equity', `SPY · ${fmt(us?.spy_price, 2, ' USD')}`, `KOSPI200 · ${fmt(korea?.kospi200)}`],
     ['Volatility', `VIX · ${fmt(us?.vix_level)}`, `VKOSPI · ${fmt(korea?.vkospi)}`],

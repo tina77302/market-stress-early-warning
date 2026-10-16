@@ -2,9 +2,10 @@
 
 import { useEffect, useState } from 'react';
 export type Market = 'us' | 'korea';
-export interface InputHealth { series: string; provider: string; status: string; latest_observation_date: string | null; retrieved_at: string | null; attempt_count: number }
+export interface InputHealth { value?: number | null; used_observation_date?: string | null; observation_date?: string | null; series: string; provider: string; status: string; latest_observation_date: string | null; retrieved_at: string | null; attempt_count: number }
 export interface DataHealth { status: string; is_current: boolean; model_available?: boolean; expected_observation_date: string | null; input_series: InputHealth[]; last_job?: {status: string; error_message?: string | null} | null }
 export interface Latest {
+  input_series?: InputHealth[];
   data_health?: DataHealth;
   last_updated?: string;
   risk_score_10d?: number | null;

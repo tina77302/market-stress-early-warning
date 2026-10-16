@@ -18,7 +18,7 @@ export default function MarketHeader() {
     { href: '/us', label: 'U.S. Market', active: path === '/us' },
     { href: '/korea', label: 'Korea Market', active: path === '/korea' },
     { href: '/compare', label: 'Compare', active: path === '/compare' },
-    { href: '/paper-trading', label: 'Paper Trading', active: path === '/paper-trading' },
+    { href: '/paper-trading', label: 'Multi-Asset / Paper Trading', active: path === '/paper-trading' },
     { href: korea ? '/korea/validation' : '/validation', label: 'Validation', active: path === '/validation' || path === '/korea/validation' },
     { href: korea ? '/korea/methodology' : '/methodology', label: 'Methodology', active: path === '/methodology' || path === '/korea/methodology' },
   ];
