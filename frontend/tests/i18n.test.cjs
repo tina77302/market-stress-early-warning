@@ -69,6 +69,7 @@ function checkKeys(dir) {
 checkKeys(root+'/src/app');
 require.extensions['.tsx']=(module,file)=>module._compile(ts.transpileModule(fs.readFileSync(file,'utf8'),{compilerOptions:{module:ts.ModuleKind.CommonJS,target:ts.ScriptTarget.ES2020,esModuleInterop:true,jsx:ts.JsxEmit.ReactJSX}}).outputText,file);
 const React=require('react');
+const useStateBefore=React.useState;
 const {renderToStaticMarkup}=require('react-dom/server');
 const {I18nProvider}=require('../src/app/i18n/provider.tsx');
 const {PathnameContext}=require('next/dist/shared/lib/hooks-client-context.shared-runtime');
@@ -128,7 +129,7 @@ for(const language of ['ko','en']) {
 }
 assert.equal(JSON.stringify(validationFixture),fixtureBefore,'Rendering changed validation data');
 const CrossSnapshot=require('../src/app/components/CrossMarketSnapshot.tsx').default;
-const usFixture={last_updated:'2026-10-09',risk_score_10d:11.9,market_stress_index:-1.159,data_health:{status:'ERROR',is_current:false,input_series:[]}};
+const usFixture={warning_active:false,is_stress_event:false,stress_threshold:1.292,last_updated:'2026-10-09',risk_score_10d:11.9,market_stress_index:-1.159,data_health:{status:'ERROR',is_current:false,input_series:[]}};
 const koreaFixture={is_stress_event:false,warning_active:false,stress_threshold:1.116,last_updated:'2026-10-13',risk_score_10d:37.8,market_stress_index:0.744,data_health:{status:'CURRENT',is_current:true,input_series:[]}};
 const crossKorean=render('ko',CrossSnapshot,{us:usFixture,korea:koreaFixture});
 for(const label of ['데이터 업데이트 오류','최신 데이터 반영','11.9','37.8','2026년 10월 9일','2026년 10월 13일'])assert.ok(crossKorean.includes(label),label);
@@ -140,7 +141,7 @@ const marketData=require('../src/app/components/market-data.ts');
 for(const status of ['CURRENT','DELAYED','STALE','PARTIAL','ERROR']) {
  const delayed={...usFixture,data_health:{status,is_current:status==='CURRENT',model_available:true,input_series:[]}};
  assert.equal(marketData.modelAvailable(delayed),true,status);
- assert.equal(marketData.signal('us',delayed),'LOW',status);
+ assert.equal(marketData.signal('us',delayed),'BELOW WARNING',status);
  assert.equal(marketData.signal('korea',{...delayed,risk_score_10d:65,warning_active:false}),'BELOW WARNING');
  for(const language of ['en','ko']) {
   const notice=render(language,Notice,{market:'us',latest:delayed});
@@ -161,81 +162,30 @@ try {
   assert.ok(!markup.includes('UNAVAILABLE'));
  }
 } finally {marketData.useMarket=originalUseMarket;}
-// Inject Overview's existing state while allowing child components' own hooks.
+// Overview now reads two independent markets rather than a single generic timeline.
 const Overview=require('../src/app/page.tsx').default;
-const useStateBefore=React.useState;
-for(const language of ['en','ko']) {
- const states=[delayedFixture,koreaFixture,[],null,false,[],'3Y',false,0];let index=0;
- React.useState=initial=>{
-  // I18nProvider's state must remain the real locale.
-  if(initial==='en'||initial==='ko')return useStateBefore(initial);
-  return index<states.length?[states[index++],()=>{}]:useStateBefore(initial);
- };
- try {
-  const markup=render(language,Overview);
-  const usCard=markup.match(/<article class="market-card us-card[\s\S]*?<\/article>/)[0];
-  assert.ok(usCard.includes('11.9') && usCard.includes('-1.159'));
-  assert.ok(!markup.includes('UNAVAILABLE'));
-  assert.ok(markup.includes(language==='ko'?'일부 지표 업데이트 대기':'Some indicators are awaiting updates.'));
- } finally {React.useState=useStateBefore;}
-}
+marketData.useMarket=market=>({latest:market==='us'?delayedFixture:koreaFixture,history:[],shap:null,loading:false,errors:[],retry:()=>{}});
+try {for(const language of ['en','ko']){
+ const markup=render(language,Overview);assert.ok(markup.includes('11.9'));assert.ok(markup.includes('37.8'));assert.equal((markup.match(/class="mc-card mc-preview"/g)||[]).length,2);assert.equal((markup.match(/class="mc-card mc-overview-state"/g)||[]).length,2);
+}} finally {marketData.useMarket=originalUseMarket;}
 console.log('Freshness/availability: all five freshness states retain valid scores; missing/invalid models unavailable; Overview/U.S./Korea/Compare bilingual rendering passed.');
 
-// Factor cards: available-driver sums determine direction; largest absolute
-// contribution supplies the label, even when its sign differs from the net.
+// New console preserves signed model explanation data without risk categories.
 const MarketDetail=require('../src/app/components/MarketDetail.tsx').default;
-function factorCards(markup) {
- return [...markup.matchAll(/<div class="driver factor-summary [\s\S]*?<\/div><\/div>/g)].map(match=>match[0]);
-}
-try {
- for(const market of ['us','korea'])for(const language of ['en','ko']) {
-  const equity=market==='us'?'SPY':'KOSPI200';
-  const volatility=market==='us'?'VIX':'VKOSPI';
-  const driver=(feature,value)=>({feature,shap_value:value});
-  const fixtures=[
-   driver(`${equity}_1D_Return`,3),driver(`${equity}_5D_Return`,3),driver(`${equity}_60D_Vol`,-5),
-   driver(`${volatility}_Level`,-1),driver(`${volatility}_252D_ZScore`,-2),
-   driver('Credit_Level',2),driver('Credit_5D_Change',-2),
-  ];
-  marketData.useMarket=()=>({latest:market==='us'?delayedFixture:koreaFixture,history:[],shap:{date:'2026-10-13',feature_count:17,top_drivers:fixtures},loading:false,errors:[],retry:()=>{}});
-  const markup=render(language,MarketDetail,{market});
-  const cards=factorCards(markup);
-  assert.equal(cards.length,3);
-  for(const [index,label] of (language==='ko'?['주식 요인','변동성 요인','신용 요인']:['Equity factors','Volatility factors','Credit factors']).entries())assert.ok(cards[index].includes(label));
-  const directions=market==='korea' ? (language==='ko'?['향후 Risk Score를 높이는 방향으로 기여 ↑','향후 Risk Score를 낮추는 방향으로 기여 ↓','향후 Risk Score에 대한 기여 중립']:['Contributes toward a higher forward Risk Score ↑','Contributes toward a lower forward Risk Score ↓','Neutral contribution to the forward Risk Score']) : (language==='ko'?['현재 모델 위험 확대 ↑','현재 모델 위험 완화 ↓','현재 모델 위험 기여 중립']:['Model risk contribution: Higher ↑','Model risk contribution: Lower ↓','Model risk contribution: Neutral']);
-  for(const [index,direction] of directions.entries())assert.ok(cards[index].includes(direction));
-  for(const [index,feature] of [`${equity} 60D Vol`,`${volatility} 252D ZScore`,'Credit Level'].entries()) {
-   assert.ok(cards[index].includes(translateText(language,feature)),feature);
-   assert.ok(cards[index].includes(language==='ko'?'주요 영향:':'Main influence:'));
-  }
-  assert.ok(markup.includes(language==='ko'?'인과관계를 뜻하지 않습니다':'not causal effects'));
-  assert.ok(markup.includes('shap-grid'),'Detailed SHAP evidence remains');
-  if(market==='korea') {
-   for(const copy of ['Operational warning not triggered','Being below the warning threshold does not rule out market shocks.','Stress Event threshold not reached','SHAP explains how inputs contribute to the 10-trading-day Risk Score, not whether the current market is safe.'])assert.ok(markup.includes(translateText(language,copy)),copy);
-   assert.ok(markup.indexOf('research-status-panel') < markup.indexOf('korea-trend-panel'));
-   assert.ok(markup.includes(koreaFixture.last_updated));
-   assert.ok(markup.includes('monitor-hero') && markup.includes('monitor-signal-grid'));
-   assert.ok(markup.includes(`stroke-dasharray="${koreaFixture.risk_score_10d} 100"`),'Gauge preserves API score');
-   assert.ok(markup.includes(translateText(language,'Observed model inputs · not independent alerts')));
-   assert.ok(markup.includes(translateText(language,'Operational warning transitions are not supplied by this API.')));
-   assert.ok(markup.includes(translateText(language,'No validated live industry matrix is available.')));
-  }
-  // Reverse every nonzero category to check the opposite directions too.
-  fixtures.forEach(d=>{d.shap_value=-d.shap_value;});
-  const reversed=factorCards(render(language,MarketDetail,{market}));
-  assert.ok(reversed[0].includes(directions[1]));
-  assert.ok(reversed[1].includes(directions[0]));
-  // A missing category has no invented representative or direction.
-  fixtures.splice(0,fixtures.length,driver(`${equity}_20D_Momentum`,0));
-  const missing=factorCards(render(language,MarketDetail,{market}));
-  assert.ok(missing[0].includes(directions[2]));
-  for(const card of missing.slice(1)) {
-   assert.ok(card.includes(language==='ko'?'모델 기여도 조회 불가':'Model contribution unavailable'));
-   assert.ok(!card.includes(language==='ko'?'주요 영향:':'Main influence:'));
-  }
- }
-} finally {marketData.useMarket=originalUseMarket;}
-console.log('U.S./Korea factor cards: bilingual labels, mixed-sign sums, strongest absolute driver, ties, neutral, unavailable and detailed SHAP rendering passed.');
+try {for(const market of ['us','korea'])for(const language of ['en','ko']){
+ const equity=market==='us'?'SPY':'KOSPI200',volatility=market==='us'?'VIX':'VKOSPI';
+ const fixtures=[{feature:equity+'_1D_Return',shap_value:3},{feature:equity+'_5D_Return',shap_value:3},{feature:equity+'_60D_Vol',shap_value:-5},{feature:volatility+'_Level',shap_value:-1},{feature:volatility+'_252D_ZScore',shap_value:-2},{feature:'Credit_Level',shap_value:2},{feature:'Credit_5D_Change',shap_value:-2}];
+ marketData.useMarket=()=>({latest:market==='us'?delayedFixture:koreaFixture,history:[],shap:{date:'2026-10-13',feature_count:17,top_drivers:fixtures},loading:false,errors:[],retry:()=>{}});
+ const markup=render(language,MarketDetail,{market});
+ for(const [label,value] of [['Equity',1],['Volatility',-3],['Credit',0]])assert.ok(markup.includes('data-factor="'+label+'" data-value="'+value+'"'));
+ assert.ok(markup.includes(translateText(language,'SHAP contributions explain model output, not causal effects.')));
+ assert.ok(markup.indexOf('mc-buildup')<markup.indexOf('mc-secondary'));
+ if(market==='korea')assert.ok(markup.includes('mc-score-path'));assert.ok(markup.includes('mc-date-table'));assert.ok(markup.includes('mc-date-detail'));
+ if(market==='korea')for(const value of ['12.1','15.6','37.8','32.3','40.5'])assert.ok(markup.includes(value));
+ fixtures.forEach(d=>{d.shap_value=-d.shap_value});const reversed=render(language,MarketDetail,{market});assert.ok(reversed.includes('data-factor="Equity" data-value="-1"'));assert.ok(reversed.includes('data-factor="Volatility" data-value="3"'));
+ fixtures.splice(0,fixtures.length,{feature:equity+'_20D_Momentum',shap_value:0});const missing=render(language,MarketDetail,{market});assert.ok(missing.includes('data-factor="Equity" data-value="0"'));assert.ok(!missing.includes('data-factor="Volatility" data-value='));
+}}finally{marketData.useMarket=originalUseMarket;}
+console.log('Console: two-market Overview, signed factors, unknown evidence, risk trajectory before secondary analysis and bilingual detail rendering passed.');
 // Shared console preserves API warning state separately from score bands and MSI.
 const MarketMonitorCard=require('../src/app/components/MarketMonitorCard.tsx').default;
 for(const market of ['us','korea'])for(const language of ['en','ko']) {

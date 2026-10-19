@@ -3,11 +3,12 @@
 import { useEffect, useState } from 'react';
 export type Market = 'us' | 'korea';
 export interface InputHealth { value?: number | null; used_observation_date?: string | null; observation_date?: string | null; series: string; provider: string; status: string; latest_observation_date: string | null; retrieved_at: string | null; attempt_count: number }
-export interface DataHealth { status: string; is_current: boolean; model_available?: boolean; expected_observation_date: string | null; input_series: InputHealth[]; last_job?: {status: string; error_message?: string | null} | null }
+export interface DataHealth { published_at?: string | null; status: string; is_current: boolean; model_available?: boolean; expected_observation_date: string | null; input_series: InputHealth[]; last_job?: {status: string; error_message?: string | null} | null }
 export interface Latest {
   input_series?: InputHealth[];
   data_health?: DataHealth;
   last_updated?: string;
+  model_inference_at?: string | null;
   risk_score_10d?: number | null;
   market_stress_index?: number | null;
   spy_price?: number | null;
@@ -37,11 +38,11 @@ export function modelAvailable(latest: Latest | null | undefined) {
 export function signal(market: Market, latest: Latest | null) {
   const score = latest?.risk_score_10d;
   if (!modelAvailable(latest) || !finite(score)) return 'UNAVAILABLE';
-  if (market === 'korea') return (typeof latest?.warning_active === 'boolean' ? latest.warning_active : score >= 50) ? 'WARNING' : 'BELOW WARNING';
-  return score >= 70 ? 'HIGH' : score >= 50 ? 'ELEVATED' : score >= 30 ? 'WATCH' : 'LOW';
+  return (typeof latest?.warning_active === 'boolean' ? latest.warning_active : score >= 50) ? 'WARNING' : 'BELOW WARNING';
 }
-export const tone = (status: string) => status === 'UNAVAILABLE' ? 'muted' : ['HIGH', 'ELEVATED', 'WARNING'].includes(status) ? 'red' : status === 'WATCH' ? 'amber' : 'green';
+export const tone = (status: string) => status === 'WARNING' ? 'red' : 'muted';
 export function useMarket(market: Market) {
+  const [dataMarket, setDataMarket] = useState(market);
   const [latest, setLatest] = useState<Latest | null>(null);
   const [history, setHistory] = useState<HistoryPoint[]>([]);
   const [shap, setShap] = useState<Shap | null>(null);
@@ -65,9 +66,10 @@ export function useMarket(market: Market) {
       setHistory(rows.filter(row => typeof row.date === 'string').map(row => Object.fromEntries(Object.entries(row).map(([key, value]) => [key, typeof value === 'number' && !finite(value) ? null : value])) as HistoryPoint).sort((a, b) => a.date.localeCompare(b.date)));
       setShap(drivers.status === 'fulfilled' && current.status === 'fulfilled' && drivers.value.date === current.value.last_updated && Array.isArray(drivers.value.top_drivers) ? { ...drivers.value, top_drivers: drivers.value.top_drivers.filter((driver: Driver) => typeof driver.feature === 'string' && finite(driver.shap_value)) } : null);
       setErrors([current, historical, drivers].flatMap((result, index) => result.status === 'rejected' ? [['Current snapshot', 'History', 'SHAP drivers'][index]] : []));
+      setDataMarket(market);
       setLoading(false);
     });
     return () => controller.abort();
   }, [market, refresh]);
-  return { latest, history, shap, loading, errors, retry: () => setRefresh(value => value + 1) };
+  return { latest:dataMarket===market?latest:null, history:dataMarket===market?history:[], shap:dataMarket===market?shap:null, loading:dataMarket!==market||loading, errors:dataMarket===market?errors:[], retry: () => setRefresh(value => value + 1) };
 }

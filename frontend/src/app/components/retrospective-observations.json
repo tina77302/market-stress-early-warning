@@ -1,0 +1,71 @@
+{
+  "market": "korea",
+  "record_type": "RETROSPECTIVE",
+  "description": "Read-only display archive from existing provider-validated snapshots and completed frozen-model replay. Not a monitoring ledger or a LIVE forecast. Replay-only dates have no publication timestamp. Returns are retrospective price-history calculations; historical Data Health is unavailable.",
+  "model_sha256": "42c3026386a58b25df337a431fbd5a793e93665a3d9a3f2cf22be4cfcc9186e3",
+  "replay_csv_sha256": "d79c6e30a33b89129dac07fff71b036f295eb102fab1ac14ebce14c2f2719e3d",
+  "feature_history_sha256": "bb4267f27ba4c924d0052582ac9e03ab6a88c0151b92c87a9b10c8cd7a82a2bc",
+  "msi_history_sha256": "d9d3327f4beb105afd127f2641bd24c1d83888ce7c5930f5ef3fa1c49d6b33d9",
+  "observations": [
+    {
+      "date": "2026-10-08",
+      "score": 12.1,
+      "msi": 0.298,
+      "movement": -2.711362387414673,
+      "warning": false,
+      "stress": false,
+      "published": "2026-10-12T08:48:04.483636+00:00",
+      "health": null,
+      "basis": "Stored snapshot",
+      "snapshot_id": "114994fdc10396f92c1324a19a34fc1252d61c0458279e94e3ebd558eb90bdb1"
+    },
+    {
+      "date": "2026-10-12",
+      "score": 15.6,
+      "msi": 0.4966867148051102,
+      "movement": -3.7912151035882524,
+      "warning": false,
+      "stress": false,
+      "published": null,
+      "health": null,
+      "basis": "Frozen-model replay",
+      "snapshot_id": null
+    },
+    {
+      "date": "2026-10-13",
+      "score": 37.8,
+      "msi": 0.744,
+      "movement": -6.254229192373517,
+      "warning": false,
+      "stress": false,
+      "published": "2026-10-14T00:17:35.006050+00:00",
+      "health": null,
+      "basis": "Stored snapshot",
+      "snapshot_id": "4bbc5791665c7fd6d0b123783e695894c88107bbe2f456a3d2bb3a71edb4bece"
+    },
+    {
+      "date": "2026-10-14",
+      "score": 32.3,
+      "msi": 0.7198486500390797,
+      "movement": -0.5572834290445527,
+      "warning": false,
+      "stress": false,
+      "published": null,
+      "health": null,
+      "basis": "Frozen-model replay",
+      "snapshot_id": null
+    },
+    {
+      "date": "2026-10-15",
+      "score": 40.5,
+      "msi": 1.049,
+      "movement": -8.125360261309533,
+      "warning": false,
+      "stress": false,
+      "published": "2026-10-16T07:58:51.703060+00:00",
+      "health": null,
+      "basis": "Stored snapshot",
+      "snapshot_id": "ff40ac826822dba7bab8145de827ff8f41fc571e39e0b7336414296fd633522f"
+    }
+  ]
+}

@@ -2,26 +2,32 @@
 
 import { Activity, ShieldAlert, Layers, Network, Database, TrendingUp } from 'lucide-react';
 import { LocalizedText, useI18n } from '../i18n/provider';
-import { finite, fmt, HistoryPoint, Latest, modelAvailable } from './market-data';
+import { publicationTime } from './monitoring-data';
+import { finite, fmt, HistoryPoint, Latest, Market, modelAvailable } from './market-data';
 
 function usedDate(latest: Latest | null, series: string) {
   const input = latest?.input_series?.find(item => item.series === series);
   return input?.used_observation_date || input?.observation_date || latest?.last_updated || '—';
 }
 
-export function KoreaMonitorHero({ latest, status }: { latest: Latest | null; status: string }) {
-  const { t } = useI18n();
+export function KoreaMonitorHero({ latest, status, market = 'korea' }: { latest: Latest | null; status: string; market?: Market }) {
+  const { t, locale } = useI18n();
   const available = modelAvailable(latest);
   const score = available ? latest!.risk_score_10d! : null;
   const msi = available ? latest!.market_stress_index! : null;
   const threshold = latest?.stress_threshold;
   const sourceValue = (series: string) => latest?.input_series?.find(item => item.series === series)?.value;
-  const metrics = [
+  const korea = market === 'korea';
+  const metrics = korea ? [
     { label: 'KOSPI200', value: fmt(latest?.kospi200), date: usedDate(latest, 'KOSPI200') },
     { label: 'VKOSPI', value: fmt(latest?.vkospi), date: usedDate(latest, 'VKOSPI') },
     { label: 'Credit Spread', value: fmt(latest?.korea_credit_spread_bp, 1, ' bp'), date: `${usedDate(latest, 'Korea_Treasury_3Y')} / ${usedDate(latest, 'Korea_Corporate_AAminus_3Y')}` },
     { label: 'Treasury 3Y', value: fmt(sourceValue('Korea_Treasury_3Y'), 3, '%'), date: usedDate(latest, 'Korea_Treasury_3Y') },
     { label: 'Corporate AA− 3Y', value: fmt(sourceValue('Korea_Corporate_AAminus_3Y'), 3, '%'), date: usedDate(latest, 'Korea_Corporate_AAminus_3Y') },
+  ] : [
+    {label:'SPY',value:fmt(latest?.spy_price,2,' USD'),date:usedDate(latest,'SPY')},
+    {label:'VIX',value:fmt(latest?.vix_level),date:usedDate(latest,'VIX')},
+    {label:'Credit spread (pp)',value:fmt(latest?.baa_treasury_spread,3),date:usedDate(latest,'DBAA')},
   ];
   return <section className="monitor-hero" aria-label={t('Market status')}>
     <article className={`monitor-panel monitor-risk ${status === 'WARNING' ? 'monitor-warning' : ''}`}>
@@ -41,7 +47,7 @@ export function KoreaMonitorHero({ latest, status }: { latest: Latest | null; st
         </div>
         <div className="monitor-warning-state"><span className="monitor-label"><LocalizedText>{'V1 operational warning'}</LocalizedText></span><strong className={status === 'WARNING' ? 'red' : ''}><LocalizedText>{status === 'BELOW WARNING' ? 'Operational warning not triggered' : status}</LocalizedText></strong><span className="monitor-threshold"><LocalizedText>{'Warning ≥ 50'}</LocalizedText></span><p><LocalizedText>{'Being below the warning threshold does not rule out market shocks.'}</LocalizedText></p></div>
       </div>
-      <footer><LocalizedText>{'Data date'}</LocalizedText>: {latest?.last_updated || '—'}</footer>
+      <footer><LocalizedText>{'Data date'}</LocalizedText>: {latest?.last_updated || '—'} · <LocalizedText>{'Published At'}</LocalizedText>: {publicationTime(latest?.data_health?.published_at??null,locale)}</footer>
     </article>
     <article className={`monitor-panel monitor-msi ${latest?.is_stress_event ? 'monitor-warning' : ''}`}>
       <header className="monitor-panel-title"><Activity size={22}/><div><h2><LocalizedText>{'Current Stress'}</LocalizedText></h2><span><LocalizedText>{'OBSERVED MARKET STRESS · MSI'}</LocalizedText></span></div></header>
@@ -53,9 +59,9 @@ export function KoreaMonitorHero({ latest, status }: { latest: Latest | null; st
       </> : <p><LocalizedText>{'Stress reference unavailable'}</LocalizedText></p>}
       <div className="monitor-msi-state"><span className="status-dot"/><LocalizedText>{typeof latest?.is_stress_event === 'boolean' ? latest.is_stress_event ? 'STRESS EVENT' : 'Stress Event threshold not reached' : 'UNAVAILABLE'}</LocalizedText></div>
       <p className="monitor-caption"><LocalizedText>{'Below the Stress Event threshold does not mean low market stress.'}</LocalizedText></p>
-      <footer><LocalizedText>{'Data date'}</LocalizedText>: {latest?.last_updated || '—'}</footer>
+      <footer><LocalizedText>{'Data date'}</LocalizedText>: {latest?.last_updated || '—'} · <LocalizedText>{'Published At'}</LocalizedText>: {publicationTime(latest?.data_health?.published_at??null,locale)}</footer>
     </article>
-    <article className="monitor-panel monitor-key-inputs"><header className="monitor-panel-title"><Database size={19}/><h2><LocalizedText>{'Key market inputs'}</LocalizedText></h2></header><div>{metrics.map(metric=><div className="monitor-input" key={metric.label}><span><LocalizedText>{metric.label}</LocalizedText><small>{metric.date}</small></span><strong>{metric.value}</strong></div>)}</div><footer><LocalizedText>{'Credit dates: Treasury / Corporate'}</LocalizedText></footer></article>
+    <article className="monitor-panel monitor-key-inputs"><header className="monitor-panel-title"><Database size={19}/><h2><LocalizedText>{'Key market inputs'}</LocalizedText></h2></header><div>{metrics.map(metric=><div className="monitor-input" key={metric.label}><span title={metric.date} tabIndex={0}><LocalizedText>{metric.label}</LocalizedText><small>{metric.date}</small></span><strong>{metric.value}</strong></div>)}</div><footer><LocalizedText>{'Observation Date'}</LocalizedText>: {latest?.last_updated || '—'}</footer></article>
   </section>;
 }
 

@@ -2,15 +2,16 @@
 
 import Link from 'next/link';
 import { ArrowUpRight, Activity, ShieldAlert } from 'lucide-react';
-import { LocalizedText } from '../i18n/provider';
+import { LocalizedText, useI18n } from '../i18n/provider';
 import DataHealthNotice from './DataHealthNotice';
-import { finite, fmt, Latest, Market, modelAvailable, signal } from './market-data';
+import { publicationTime } from './monitoring-data';
+import { finite, fmt, Latest, Market, modelAvailable } from './market-data';
 
 /** Presentation of existing classifications and API event states; no new alert rules. */
 export default function MarketMonitorCard({market,latest}:{market:Market;latest:Latest|null}) {
+  const {locale}=useI18n();
   const korea=market==='korea';
   const available=modelAvailable(latest);
-  const state=signal(market,latest);
   const warning=typeof latest?.warning_active==='boolean' ? latest.warning_active : null;
   const score=available?latest!.risk_score_10d:null;
   const msi=available?latest!.market_stress_index:null;
@@ -25,9 +26,9 @@ export default function MarketMonitorCard({market,latest}:{market:Market;latest:
       <div><div className="overview-metric-label"><ShieldAlert size={14}/><LocalizedText>{'Future Risk Score'}</LocalizedText></div><div className="overview-score">{fmt(score,1)}<small>/ 100</small></div><span className="overview-metric-caption"><LocalizedText>{'10-trading-day outlook · not a probability'}</LocalizedText></span><div className="metric-gauge"><span className="gauge-fill" style={{width:`${finite(score)?score:0}%`}}/>{finite(reference)&&<i className="gauge-threshold" style={{left:`${reference}%`}}/>}</div><p className="overview-reference"><LocalizedText>{'Operational threshold'}</LocalizedText>: {fmt(reference,0)} / 100</p></div>
       <div><div className="overview-metric-label"><Activity size={14}/><LocalizedText>{'Current Stress'}</LocalizedText></div><div className="overview-score overview-msi">{fmt(msi,3)}<small><LocalizedText>{'MSI'}</LocalizedText></small></div><span className="overview-metric-caption"><LocalizedText>{'Currently observed market conditions'}</LocalizedText></span>{finite(stressReference)&&stressReference>0&&finite(msi)&&<div className="metric-gauge"><span className="gauge-fill" style={{width:`${Math.min(100,Math.max(0,msi/(2*stressReference)*100))}%`}}/><i className="gauge-threshold" style={{left:'50%'}}/></div>}<p className="overview-reference"><LocalizedText>{'Stress Event threshold'}</LocalizedText>: {fmt(stressReference,3)}</p></div>
     </div>
-    <div className="overview-operational-state"><span className={`status-dot ${warning===true?'red':''}`}/><strong><LocalizedText>{!available?'UNAVAILABLE':warning===true?'WARNING':warning===false?'Operational warning not triggered':'Operational warning state unavailable'}</LocalizedText></strong>{!korea&&<span><LocalizedText>{'Existing U.S. score band'}</LocalizedText>: <LocalizedText>{state}</LocalizedText></span>}</div>
+    <div className="overview-operational-state"><span className={`status-dot ${warning===true?'red':''}`}/><strong><LocalizedText>{!available?'UNAVAILABLE':warning===true?'WARNING':warning===false?'Operational warning not triggered':'Operational warning state unavailable'}</LocalizedText></strong></div>
     <div className="overview-stress-state"><LocalizedText>{typeof latest?.is_stress_event==='boolean'?latest.is_stress_event?'STRESS EVENT':'Stress Event threshold not reached':'Stress Event state unavailable'}</LocalizedText></div>
     <div className="overview-input-strip">{metrics.map(([label,value],index)=><div key={label}><span><LocalizedText>{label}</LocalizedText></span><strong>{value}</strong><small>{index===0?sourceDate(korea?'KOSPI200':'SPY'):index===1?sourceDate(korea?'VKOSPI':'VIX'):`${sourceDate(korea?'Korea_Treasury_3Y':'DGS10')} / ${sourceDate(korea?'Korea_Corporate_AAminus_3Y':'DBAA')}`}</small></div>)}</div>
-    <footer className="monitor-caption"><LocalizedText>{'Data date'}</LocalizedText>: {latest?.last_updated||'—'} · <LocalizedText>{'Being below the warning threshold does not rule out market shocks.'}</LocalizedText></footer>
+    <footer className="monitor-caption"><LocalizedText>{'Data date'}</LocalizedText>: {latest?.last_updated||'—'} · <LocalizedText>{'Published At'}</LocalizedText>: {publicationTime(latest?.data_health?.published_at??null,locale)} · <LocalizedText>{'Being below the warning threshold does not rule out market shocks.'}</LocalizedText></footer>
   </article>;
 }

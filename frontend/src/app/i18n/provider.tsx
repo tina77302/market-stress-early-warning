@@ -1,5 +1,6 @@
 'use client';
 
+import { Globe2 } from 'lucide-react';
 import { cloneElement, createContext, isValidElement, ReactElement, ReactNode, useContext, useEffect, useMemo, useRef, useState } from 'react';
 import { Language, languageCookie, localeCodes, MessageKey, message, translateText } from './messages';
 interface Context { language: Language; locale: string; setLanguage: (language: Language) => void; t: (source: string) => string }
@@ -55,7 +56,7 @@ export function LanguageSwitcher() {
     trigger.current?.focus();
   }
   return <details className="language-switcher" ref={dropdown} onKeyDown={event=>{if(event.key==='Escape'){event.preventDefault();close();}}}>
-    <summary ref={trigger} aria-label={t('Interface language')}><span aria-hidden="true">🌐</span><span lang={active.code}>{active.label}</span><span className="language-chevron" aria-hidden="true">▼</span></summary>
+    <summary ref={trigger} aria-label={t('Interface language')}><Globe2 size={13} aria-hidden="true"/><span lang={active.code}>{active.label}</span><span className="language-chevron" aria-hidden="true">▼</span></summary>
     <div className="language-options" role="group" aria-label={t('Interface language')}>
       {languageOptions.map(option=><button key={option.code} type="button" lang={option.code} aria-pressed={language===option.code} onClick={()=>{setLanguage(option.code);close();}}><span aria-hidden="true">{option.flag}</span><span>{option.label}</span><span className="language-check" aria-hidden="true">{language===option.code?'✓':''}</span></button>)}
     </div>

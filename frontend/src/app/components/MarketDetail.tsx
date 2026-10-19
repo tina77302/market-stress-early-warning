@@ -8,10 +8,12 @@ import Link from 'next/link';
 import { CartesianGrid, ComposedChart, Line, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts';
 import { finite, modelAvailable, fmt, HistoryPoint, Market, signal, useMarket } from './market-data';
 import DataHealthNotice from './DataHealthNotice';
-import { KoreaMonitorHero, KoreaSignals, KoreaIndustryResearch, KoreaArchiveTimeline } from './KoreaMonitor';
+import { KoreaMonitorHero, KoreaSignals, KoreaIndustryResearch } from './KoreaMonitor';
+import MarketRiskTimeline from './MarketRiskTimeline';
 import { ShieldAlert } from 'lucide-react';
 import MarketMonitorCard from './MarketMonitorCard';
 import { ModelDisclaimer } from './CrossMarketSnapshot';
+import MonitoringConsole from './MonitoringConsole';
 
 export function HistoryChart({ data, fields, sharedScale = false }: { data: HistoryPoint[]; sharedScale?: boolean; fields: { key: string; label: string; color: string }[] }) {
   const { t, locale } = useI18n();
@@ -19,81 +21,7 @@ export function HistoryChart({ data, fields, sharedScale = false }: { data: Hist
   if (!data.some(row => fields.some(field => finite(row[field.key])))) return <div className="chart-empty"><LocalizedText id="historical_data_unavailable_for_these_indicators_ee1177"/></div>;
   return <ResponsiveContainer width="100%" height="100%"><ComposedChart data={data}><CartesianGrid stroke="#203445" vertical={false}/><XAxis dataKey="date" minTickGap={55} tick={{ fill: '#8ba2b7', fontSize: 12 }}/>{fields.filter((_, i) => !sharedScale || i === 0).map((field, i) => <YAxis key={field.key} yAxisId={i} orientation={i === 1 ? 'right' : 'left'} domain={field.key === 'risk_score_xgboost' ? [0, 100] : ['auto', 'auto']} tick={{ fill: field.color, fontSize: 12 }}/>) }<Tooltip contentStyle={{ background: '#0b1a27', border: '1px solid #3c5b70', borderRadius: 10 }} formatter={(value: number) => fmt(value, 3)}/>{fields.map((field, i) => <Line key={field.key} yAxisId={sharedScale ? 0 : i} dataKey={field.key} name={t(String(field.label))} stroke={field.color} dot={false} strokeWidth={1.7} isAnimationActive={false}/>)}</ComposedChart></ResponsiveContainer>;
 }
-export default function MarketDetail({ market }: { market: Market }) {
-  const { t, locale } = useI18n();
-
-  const { latest, history, shap, loading, errors, retry } = useMarket(market);
-  const [range, setRange] = useState<'1Y' | '3Y' | '5Y' | 'ALL'>('3Y');
-  const korea = market === 'korea';
-  const name = korea ? 'KOREA' : 'U.S.';
-  const status = signal(market, latest);
-  const drivers = shap?.top_drivers ?? [];
-  // Observation-date MSI context only: never use OOS scores as issued forecast history.
-  const stressWindow = history.filter(row => finite(row.msi) && !!latest?.last_updated && row.date <= latest.last_updated).slice(-20);
-  const stressLast = stressWindow.at(-1);
-  const stressPrevious = stressWindow.at(-2);
-  const stressPeak = stressWindow.reduce<HistoryPoint | undefined>((peak, row) => !peak || Number(row.msi) > Number(peak.msi) ? row : peak, undefined);
-  const stressChange = stressLast && stressPrevious ? Number(stressLast.msi) - Number(stressPrevious.msi) : null;
-  const stressContext = stressWindow.length < 2 ? 'Trend unavailable'
-    : stressPeak && stressLast && stressPeak.date < stressLast.date && Number(stressPeak.msi) > Number(stressLast.msi)
-      ? stressChange! > 0 ? 'Rising; below recent peak' : stressChange! < 0 ? 'Pullback from recent peak' : 'Unchanged; below recent peak'
-      : stressChange! > 0 ? 'Observed stress rising' : stressChange! < 0 ? 'Observed stress falling' : 'Observed stress unchanged';
-  const groups = [
-    { label: 'Equity', match: (feature: string) => feature.startsWith(korea ? 'KOSPI200_' : 'SPY_') },
-    { label: 'Volatility', match: (feature: string) => feature.startsWith(korea ? 'VKOSPI_' : 'VIX_') },
-    { label: 'Credit', match: (feature: string) => /^(Credit_|BAA_)/.test(feature) },
-  ].map(group => {
-    const entries = drivers.filter(driver => group.match(driver.feature));
-    const net = entries.reduce((sum, driver) => sum + driver.shap_value, 0);
-    const representative = entries.reduce<typeof entries[number] | undefined>((largest, driver) => !largest || Math.abs(driver.shap_value) > Math.abs(largest.shap_value) ? driver : largest, undefined);
-    return { label: group.label, representative, direction: !entries.length ? 'Unavailable' : net > 0 ? 'Net risk-increasing' : net < 0 ? 'Net risk-reducing' : 'Neutral', net, available: entries.length > 0 };
-  });
-  const filtered = useMemo(() => {
-    if (range === 'ALL' || !history.length) return history;
-    const start = new Date(history[history.length - 1].date);
-    start.setFullYear(start.getFullYear() - Number(range[0]));
-    return history.filter(row => new Date(row.date) >= start);
-  }, [history, range]);
-  const charts = [
-    { title: 'HISTORICAL 10-DAY OOS SCORE & EQUITY', note: 'Purged walk-forward out-of-sample scores · score / 100 on left axis; equity on right axis.', fields: [{ key: 'risk_score_xgboost', label: '10D Model Score / 100', color: '#47e1bf' }, { key: korea ? 'kospi200' : 'spy', label: korea ? 'KOSPI200' : 'SPY (USD)', color: '#eab451' }] },
-    { title: 'MARKET STRESS INDEX', note: 'Current stress composite of equity, volatility and credit conditions.', fields: [{ key: 'msi', label: 'MSI', color: '#55c7ec' }] },
-    { title: 'VOLATILITY & CREDIT CONDITIONS', note: korea ? 'VKOSPI on left axis · AA− Corporate − Government 3Y spread (bp) on right axis.' : 'VIX on left axis · Baa–Treasury spread (percentage points) on right axis.', fields: [{ key: korea ? 'vkospi' : 'vix', label: korea ? 'VKOSPI' : 'VIX', color: '#eab451' }, { key: korea ? 'korea_credit_spread_bp' : 'baa_treasury_spread', label: korea ? 'Credit spread (bp)' : 'Credit spread (pp)', color: '#b79cf3' }] },
-  ];
-  return <div className={`risk-home detail-page ${korea ? 'korea-presentation' : ''}`}><div className="home-content">
-    <section className="detail-heading"><div className="eyebrow"><LocalizedText>{name}</LocalizedText><LocalizedText id="market_intelligence_9509a7" before/></div><h1>{korea ? <><ShieldAlert className="monitor-brand-icon" size={34}/><LocalizedText>{'MARKET STRESS EARLY WARNING SYSTEM'}</LocalizedText><small><LocalizedText>{'KOREA'}</LocalizedText></small></> : <LocalizedText id="10_day_financial_market_stress_outlook_d9d690"/>}</h1>{!korea && <p><LocalizedText id="independent_market_model_current_conditions_and_forward_looking_s_07fed9"/></p>}<div className="market-subnav"><Link href={korea ? '/korea/validation' : '/validation'}><LocalizedText>{name}</LocalizedText><LocalizedText id="validation_c27e35" before/></Link><Link href={korea ? '/korea/methodology' : '/methodology'}><LocalizedText>{name}</LocalizedText><LocalizedText id="methodology_964e6e" before/></Link></div></section>
-    {loading && <div className="api-notice" role="status"><LocalizedText id="loading_8f26c6" after/><LocalizedText>{name}</LocalizedText><LocalizedText id="market_observations_6fb247" before/></div>}
-    {!!errors.filter(error => !korea || error !== 'SHAP drivers').length && <div className="api-notice" role="status"><LocalizedText>{errors.filter(error => !korea || error !== 'SHAP drivers').join(', ')}</LocalizedText><LocalizedText id="unavailable_9cd983" before after/><button disabled={loading} onClick={retry}><LocalizedText id="retry_connection_a35123"/></button></div>}
-    <DataHealthNotice market={market} latest={latest} compact={korea}/>
-    {korea ? <><KoreaMonitorHero latest={latest} status={status}/><KoreaSignals latest={latest} archive={stressWindow}/></> : <>
-    <MarketMonitorCard market="us" latest={latest}/>
-    <details className="console-disclosure"><summary><LocalizedText id="deployment_model_8819af"/></summary><p><LocalizedText id="xgboost_e63bae"/> · <LocalizedText id="forecast_horizon_10_trading_days_02c9ae"/> · <LocalizedText id="validation_purged_walk_forward_oos_62fef6"/></p></details>
-    </>}
-
-    {korea && <>
-      <div className="monitor-context-grid"><KoreaIndustryResearch/>
-      <section className="history-panel korea-trend-panel">
-        <div className="chart-heading"><div><div className="eyebrow"><LocalizedText>{'01 / RECENT MARKET TREND'}</LocalizedText></div><h2><LocalizedText>{'Observed stress trajectory'}</LocalizedText></h2></div><span className="archive-badge"><LocalizedText>{'ARCHIVED MSI · OOS DATA'}</LocalizedText></span></div>
-        <div className="trend-summary"><strong><LocalizedText>{stressContext}</LocalizedText></strong>{stressChange !== null && <span><LocalizedText>{'Last archived change'}</LocalizedText> <b>{stressChange > 0 ? '+' : ''}{fmt(stressChange, 3)}</b></span>}{stressPeak && <span><LocalizedText>{'Window peak'}</LocalizedText> <b>{fmt(stressPeak.msi, 3)}</b> · {stressPeak.date}</span>}</div>
-        {stressWindow.length ? <div className="history-chart presentation-trend-chart"><HistoryChart data={stressWindow} fields={[{key:'msi',label:'Archived observed MSI',color:'#55c7ec'}]}/></div> : <p className="comparison-note"><LocalizedText id="korea_presentation_31"/></p>}
-        <p className="comparison-note archive-caption"><LocalizedText>{stressLast ? `${stressWindow.length} available observations: ${stressWindow[0].date} to ${stressLast.date}.` : 'No archived MSI observations available.'}</LocalizedText> <LocalizedText>{'Historical observations, not live forecast history.'}</LocalizedText> <LocalizedText>{'A pullback after a stress rise does not erase the earlier deterioration.'}</LocalizedText></p>
-      </section>
-
-      </div>
-      <KoreaArchiveTimeline data={stressWindow} currentDate={latest?.last_updated}/>
-      <section className="history-panel korea-explanation"><div className="eyebrow"><LocalizedText>{'02 / INTERPRETATION'}</LocalizedText></div><h2><LocalizedText>{'Why this changed'}</LocalizedText></h2><p><LocalizedText>{drivers.length ? 'Current contributors are shown below. A change since the prior forecast cannot be attributed without deployment history.' : 'SHAP attribution is unavailable for this snapshot. Changes cannot be attributed without prior deployment forecasts.'}</LocalizedText></p></section>
-    </>}
-    {!korea && <>
-    <section className="history-panel assessment"><h2>{korea ? <LocalizedText id="korea_presentation_04"/> : <LocalizedText id="current_market_assessment_0f2fdb"/>}</h2>{korea && <p className="interpretation-note"><LocalizedText id="korea_presentation_21"/></p>}<p><LocalizedText>{modelAvailable(latest) && finite(latest?.risk_score_10d) ? `${name} is ${status} with a model score of ${fmt(latest.risk_score_10d, 1)} / 100. Current MSI is ${fmt(modelAvailable(latest) ? latest?.market_stress_index : null, 3)}.` : 'The latest model assessment is unavailable.'}</LocalizedText> <LocalizedText>{korea && modelAvailable(latest) && finite(latest?.risk_score_10d) ? `The displayed score is ${latest.risk_score_10d >= 50 ? 'at or above' : 'below'} the fixed 50 / 100 warning reference; the API warning state uses the unrounded model output.` : ''}</LocalizedText></p><p><LocalizedText>{groups.map(group => `${group.label}: ${group.direction.toLowerCase()}`).join(' · ')}</LocalizedText><LocalizedText id="effects_aggregate_only_the_leading_shap_factors_supplied_by_the_a_273c5a"/></p><p><LocalizedText>{drivers.length ? `Largest available contributions: ${[...drivers].sort((a, b) => Math.abs(b.shap_value) - Math.abs(a.shap_value)).slice(0, 3).map(driver => `${driver.feature.replaceAll('_', ' ')} (${driver.shap_value > 0 ? '+' : ''}${fmt(driver.shap_value, 3)})`).join('; ')}.` : 'Major SHAP drivers are unavailable.'}</LocalizedText><LocalizedText id="these_contributions_explain_model_output_and_do_not_establish_cau_6e1864" before/></p></section>
-    </>}
-    {(!korea || drivers.length > 0) && <details className={korea ? "monitor-model-evidence" : "us-model-evidence"} open={!korea}>{korea && <summary><LocalizedText>{'SHAP / model explanation'}</LocalizedText><span>{shap?.date || '—'}</span></summary>}{!korea && <summary hidden/>}
-
-    <section className="history-panel"><h2><LocalizedText id="current_risk_drivers_ee132f"/></h2><p className="comparison-note">{korea ? <LocalizedText>{'SHAP explains how inputs contribute to the 10-trading-day Risk Score, not whether the current market is safe.'}</LocalizedText> : <LocalizedText id="factor_summary_note"/>}</p><div className="driver-groups">{groups.map(group => <div className={`driver factor-summary channel-${!group.available ? 'muted' : group.net > 0 ? 'red' : group.net < 0 ? 'green' : 'muted'}`} key={group.label}><div><span><LocalizedText>{`${group.label} factors`}</LocalizedText></span><strong><LocalizedText>{!group.available ? 'Model contribution unavailable' : group.net > 0 ? (korea ? 'Contributes toward a higher forward Risk Score ↑' : 'Model risk contribution: Higher ↑') : group.net < 0 ? (korea ? 'Contributes toward a lower forward Risk Score ↓' : 'Model risk contribution: Lower ↓') : (korea ? 'Neutral contribution to the forward Risk Score' : 'Model risk contribution: Neutral')}</LocalizedText></strong>{group.representative && <p className="factor-influence"><LocalizedText id="factor_main_influence" after/><LocalizedText>{group.representative.feature.replaceAll('_', ' ')}</LocalizedText></p>}</div></div>)}</div></section>
-    <section className="history-panel"><div className="chart-heading"><h2><LocalizedText id="shap_model_drivers_65c699"/></h2><p><LocalizedText>{shap?.date || 'Date unavailable'}</LocalizedText> · <LocalizedText>{fmt(shap?.feature_count, 0)}</LocalizedText><LocalizedText id="features_4f9445" before/></p></div><div className="shap-grid">{[true, false].map(up => <div key={String(up)}><h3 className={up ? 'red' : 'green'}>{korea ? <LocalizedText>{up ? 'Contributes toward a higher forward Risk Score ↑' : 'Contributes toward a lower forward Risk Score ↓'}</LocalizedText> : <><LocalizedText id="risk_4138cc" after/><LocalizedText>{up ? 'INCREASING' : 'REDUCING'}</LocalizedText></>}</h3>{drivers.filter(driver => up ? driver.shap_value > 0 : driver.shap_value < 0).length ? drivers.filter(driver => up ? driver.shap_value > 0 : driver.shap_value < 0).map(driver => <div className="shap-row" key={driver.feature}><span><LocalizedText>{driver.feature.replaceAll('_', ' ')}</LocalizedText></span><strong><LocalizedText>{fmt(driver.shap_value, 3)}</LocalizedText></strong></div>) : <p><LocalizedText>{`No ${up ? 'increasing' : 'reducing'} contributions available.`}</LocalizedText></p>}</div>)}</div><p className="comparison-note"><LocalizedText id="shap_values_represent_model_output_contributions_not_probability__277eba"/></p></section>
-
-    </details>}
-    <div className="chart-heading detail-range"><h2>{korea ? <LocalizedText>{'03 / HISTORICAL OOS · BACKTEST'}</LocalizedText> : <LocalizedText id="historical_market_conditions_b8ef4d"/>}</h2><div className="range-buttons" aria-label={t("History range")}>{(['1Y', '3Y', '5Y', 'ALL'] as const).map(value => <button key={value} onClick={() => setRange(value)} aria-pressed={range === value} className={range === value ? 'selected' : ''}><LocalizedText>{value}</LocalizedText></button>)}</div></div>
-    {charts.map(chart => <section className="history-panel" key={chart.title}><h2><LocalizedText>{chart.title}</LocalizedText></h2><p className="comparison-note"><LocalizedText>{chart.note}</LocalizedText></p><div className="history-chart"><HistoryChart data={filtered} fields={chart.fields}/></div></section>)}
-    {korea && <details className="presentation-methodology"><summary><LocalizedText>{'Model & evidence notes'}</LocalizedText></summary><p><LocalizedText id="korea_presentation_10"/></p><p><LocalizedText id="korea_presentation_11"/></p><p><LocalizedText id="korea_presentation_17"/></p><p><LocalizedText id="korea_presentation_20"/></p><p><LocalizedText id="korea_presentation_21"/></p><p><LocalizedText id="factor_summary_note"/></p><p><LocalizedText>{'XGBoost'}</LocalizedText> · <LocalizedText>{'Last observation'}</LocalizedText>: {latest?.last_updated || '—'}</p></details>}
-    <ModelDisclaimer/>
-  </div></div>;
+export default function MarketDetail({market}:{market:Market}) {
+  const state=useMarket(market);
+  return <MonitoringConsole market={market} {...state}/>;
 }

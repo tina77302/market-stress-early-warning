@@ -88,7 +88,7 @@ export default function PaperTradingPage() {
         <button aria-pressed={view==='korea'} onClick={()=>setView('korea')}><LocalizedText id="korea_krw_07f26e"/></button>
       </nav><button className="paper-secondary" onClick={()=>setRefresh(value=>value+1)} disabled={loading}><LocalizedText>{loading?'Refreshing…':'Refresh valuations'}</LocalizedText></button></div>
       <span className="comparison-note"><LocalizedText id="capital_single_base"/></span></div>
-      <div aria-busy={loading} className="rw-workspace"><PortfolioWorkspace view={view} user={user} books={books} investment={investment} loading={loading} csrf={csrf} onExecuted={() => setRefresh(value => value + 1)}/></div>
+      <div id="portfolio-workspace" aria-busy={loading} className="rw-workspace"><PortfolioWorkspace view={view} user={user} books={books} investment={investment} loading={loading} csrf={csrf} onExecuted={() => setRefresh(value => value + 1)}/></div>
     </>}
     <p className="model-disclaimer"><LocalizedText id="simulated_only_no_real_money_brokerage_connection_margin_leverage_708f04"/></p>
   </div></div></MarketRiskProvider>;

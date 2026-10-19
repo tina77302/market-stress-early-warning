@@ -7,7 +7,7 @@
     "build": "next build",
     "start": "next start",
     "typecheck": "tsc --noEmit --incremental false",
-    "test": "node tests/i18n.test.cjs && node tests/paper-workflow.test.cjs && node tests/stress-analytics.test.cjs && node tests/fx-disclosure.test.cjs"
+    "test": "node tests/i18n.test.cjs && node tests/paper-workflow.test.cjs && node tests/stress-analytics.test.cjs && node tests/fx-disclosure.test.cjs && node tests/monitoring.test.cjs && node tests/console.test.cjs"
   },
   "dependencies": {
     "clsx": "^2.1.1",
