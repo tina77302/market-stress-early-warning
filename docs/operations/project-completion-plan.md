@@ -1,7 +1,7 @@
 # 제품 완성 및 Live Monitoring 실행 계획
 
 - 확정일: 2026-10-19 (Asia/Seoul)
-- 상태: **실행 계획. 이 문서의 체크리스트는 구현·배포 완료를 의미하지 않는다.**
+- 상태: **실행 계획 + 2026-10-19 WIP 코드 점검 반영. 체크리스트는 운영·배포 완료를 의미하지 않는다.**
 - 기준 결정: [Z-score WATCH 연구 종료](../decisions/zscore-watch-research-closeout-2026-10-19.md)
 - 발표 연결: [발표 준비](../presentation/README.md)
 
@@ -9,16 +9,24 @@
 
 제품은 기존 XGBoost Risk Score, 현재 스트레스 MSI, 관측 Stress Event 구조를 유지한다. 별도 Z-score WATCH 통합과 새 모델 연구는 이번 범위에 포함하지 않는다.
 
-| 순서 | 작업 | 계획 상태 | 완료 증거 |
+| 순서 | 작업 | 확인 상태 | 완료에 필요한 증거 |
 | --- | --- | --- | --- |
-| 1 | Live Monitoring Log | 미완료, 최우선 | 실제 실행 시점의 불변 기록과 조회 결과 |
-| 2 | Data Health | 미완료 | 소스별 기준일·지연·결측·상태 표시 |
-| 3 | 최종 UI 확인 | 미완료 | Risk Score·MSI·Stress Event 및 시점의 일관성 |
-| 4 | AWS 호환버전 배포 | 미완료 | 고정 버전 배포와 실행·재시작·저장 확인 |
-| 5 | 전체 QA | 미완료 | 데이터 수집부터 로그·화면까지 검증 기록 |
-| 6 | 발표 정리 | 기획 문서 작성, 최종 자료 미완료 | 동일 기준 버전의 발표·시연·수치 |
+| 1 | Live Monitoring Log | WIP의 불변 로그·조회 코드 확인, 운영 완료 미확인 | 실제 운영 행·입력/모델 재현·지속 저장 |
+| 2 | Data Health | WIP 코드·기존 수동 갱신 보고 확인, 현재 운영 미확인 | 실제 소스별 상태·화면·실패/지연 확인 |
+| 3 | 최종 UI 확인 | WIP 기존 로컬 QA 보고 있음, 발표 버전 확인 필요 | Risk Score·MSI·Stress Event 및 시점의 일관성 |
+| 4 | AWS 호환버전 배포 | 이번 작업에서 배포 버전·실행 증거 미확인 | 고정 버전 배포와 실행·재시작·저장 확인 |
+| 5 | 전체 QA | 기존 보고와 별도로 최종 버전 QA 필요 | 데이터 수집부터 로그·화면까지 검증 기록 |
+| 6 | 발표 정리 | 담당·대본·코드 근거 보완, 리허설/원본 확정 필요 | 동일 기준 버전의 발표·시연·수치 |
 
 상태는 담당자가 실제 증거를 확인한 후 변경한다. 새 연구를 시작하여 완료 범위를 늘리지 않는다.
+
+### 코드 점검의 적용 범위
+
+원격 `wip/data-automation`의 `4a75acd1e1e73e58c9cb600519401a9ca4a22bc1`에서 운영·모의투자 코드를 확인했다. 현재 발표 문서 브랜치에 이 구현을 병합하거나 배포하지 않았다. [발표 근거 점검](../presentation/implementation-evidence.md)에 고정 소스와 남은 확인을 기록했다. 이번에는 WIP 실행·QA를 재수행하지 않았으므로 기존 보고를 이번 테스트 결과로 표시하지 않는다.
+
+아래 데이터 계약은 목표다. 실제 구현에서는 `generated_at`이 게시 시각이고 `model_inference_at`이 추론 시각이다. `input_snapshot_sha256`은 게시 payload 해시이므로 아래 `input_hash`의 feature row 계약과 동일하다고 간주하지 않는다. 기록 유형은 LIVE/RETROSPECTIVE이고 Data Health 상태는 CURRENT/DELAYED/STALE/PARTIAL/ERROR다. 아래 SHADOW/BACKFILL과 FRESH 등의 개념 구분을 실제 enum 이름으로 설명하지 않는다.
+
+모의투자는 WIP의 수동 주문·비용·환전·통합 계정 평가 기능을 확인했다. 다일 수익률·MDD·비교전략 원본은 미확인이다. 기능 설명과 성과 입증을 분리하고 발표 수치를 만들기 위한 규칙 탐색은 진행하지 않는다.
 
 ## 2. Live Monitoring Log의 목적
 
