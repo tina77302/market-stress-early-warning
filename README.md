@@ -2,6 +2,16 @@
 
 > **AI-based early-warning system for broad U.S. financial-market stress using equity, volatility, and credit-market information.**
 
+## Project completion decision — 2026-10-19
+
+Z-score WATCH research is closed and the separate WATCH signal will not be added to the main product alert. The existing XGBoost Risk Score, MSI and observed Stress Event structure is retained. Existing Z-score standardization and model features are unchanged.
+
+The implementation priority is Live Monitoring Log, Data Health, final UI review, AWS-compatible deployment, end-to-end QA, then presentation finalization. These are planned tasks, not claims of completed implementation or deployment.
+
+- [Final research decision and corrected October interpretation](docs/decisions/zscore-watch-research-closeout-2026-10-19.md)
+- [Product completion plan and Live Monitoring Log contract](docs/operations/project-completion-plan.md)
+- [Presentation plan, demo and Q&A](docs/presentation/README.md)
+
 ## Research Question
 
 **Can currently observable financial-market information provide an early warning of a U.S. financial-market Stress Event occurring within the next 10 trading days?**
