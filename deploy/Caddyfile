@@ -12,7 +12,7 @@
 	}
 	@market {
 		method GET
-		path /health /api/latest /api/historical /api/validation /api/multi-horizon-validation /api/shap /api/data-health /api/korea/latest /api/korea/historical /api/korea/validation /api/korea/shap
+		path /health /api/latest /api/historical /api/validation /api/multi-horizon-validation /api/shap /api/data-health /api/monitoring/latest /api/monitoring/history /api/korea/latest /api/korea/historical /api/korea/validation /api/korea/shap
 	}
 	handle @market {
 		reverse_proxy api:8000

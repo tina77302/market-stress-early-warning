@@ -194,7 +194,8 @@ def refresh(market, trigger='manual', adopt_local=False, providers_factory=Provi
             if previous and payload['last_updated']<previous['observation_date']:
                 raise ValidationFailure('Provider response would regress the last-known-good date.')
             report.update(status='SUCCESS',snapshot_published=True)
-            publish(job_id,market,payload,report)
+            publish(job_id,market,payload,report,
+                    record_type='RETROSPECTIVE' if adopt_local else 'LIVE')
             committed=True
             if payload['last_updated']<date or adopt_local:
                 alerts.emit(market,'required_series_stale',report,job_id)

@@ -43,6 +43,8 @@ app = FastAPI(
 from src.paper.router import router as paper_router
 app.include_router(paper_router)
 app.include_router(admin_router)
+from src.api.monitoring import router as monitoring_router
+app.include_router(monitoring_router)
 
 
 # ==================================================

@@ -47,6 +47,8 @@ def database():
       id INTEGER PRIMARY KEY, market TEXT NOT NULL, job_id TEXT, action TEXT NOT NULL,
       created_at TEXT NOT NULL, payload TEXT NOT NULL, delivered_at TEXT);
     ''')
+    from .monitoring import SCHEMA
+    db.executescript(SCHEMA)
     try:
         yield db
         db.commit()
@@ -65,7 +67,7 @@ def record_attempt(job_id, provider, series, attempt, started_at, status, latest
     return finished
 
 
-def publish(job_id, market, payload, report=None):
+def publish(job_id, market, payload, report=None, *, record_type='RETROSPECTIVE'):
     if 'attribution' in payload:
         from src.explainability.attribution import validate
         validate(payload['attribution'], payload, market)
@@ -74,7 +76,7 @@ def publish(job_id, market, payload, report=None):
     snapshot_id = hashlib.sha256((market + encoded).encode()).hexdigest()
     with database() as db:
         db.execute('BEGIN IMMEDIATE')
-        job = db.execute('SELECT market FROM jobs WHERE job_id=?',(job_id,)).fetchone()
+        job = db.execute('SELECT * FROM jobs WHERE job_id=?',(job_id,)).fetchone()
         if not job or job['market'] != market:
             raise ValueError('Publication requires a ledger job for the same market.')
         previous = db.execute('SELECT s.observation_date FROM snapshots s JOIN current_snapshots c USING(snapshot_id) WHERE c.market=?', (market,)).fetchone()
@@ -90,9 +92,16 @@ def publish(job_id, market, payload, report=None):
             return value
         if previous_payload and content(json.loads(previous_payload['payload'])) == content(payload):
             snapshot_id = previous_payload['snapshot_id']
-        db.execute('INSERT OR IGNORE INTO snapshots VALUES (?,?,?,?,?,?)', (snapshot_id, market, payload['last_updated'], utcnow(), job_id, encoded))
+        published_at = utcnow()
+        db.execute('INSERT OR IGNORE INTO snapshots VALUES (?,?,?,?,?,?)', (snapshot_id, market, payload['last_updated'], published_at, job_id, encoded))
+        # Log the exact snapshot readers receive, including when content deduplication
+        # reuses an older snapshot. The new publication still gets its own record.
+        from .monitoring import append_publication
+        published = db.execute('SELECT payload FROM snapshots WHERE snapshot_id=?', (snapshot_id,)).fetchone()['payload']
+        append_publication(db, job, market, snapshot_id, published, published_at,
+                           record_type=record_type, refresh_payload=payload)
         db.execute('INSERT INTO current_snapshots VALUES (?,?) ON CONFLICT(market) DO UPDATE SET snapshot_id=excluded.snapshot_id', (market, snapshot_id))
-        db.execute("UPDATE jobs SET status='SUCCESS',finished_at=?,snapshot_published=1,report=? WHERE job_id=?", (utcnow(), json.dumps(report, allow_nan=False) if report is not None else encoded, job_id))
+        db.execute("UPDATE jobs SET status='SUCCESS',finished_at=?,snapshot_published=1,report=? WHERE job_id=?", (published_at, json.dumps(report, allow_nan=False) if report is not None else encoded, job_id))
     return snapshot_id
 
 

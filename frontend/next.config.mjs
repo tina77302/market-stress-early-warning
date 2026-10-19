@@ -3,7 +3,7 @@ const nextConfig = {
   output: 'standalone',
   async rewrites() {
     const api = process.env.API_INTERNAL_URL || 'http://127.0.0.1:8000';
-    const endpoints = ['historical', 'multi-horizon-validation', 'validation', 'shap', 'latest', 'data-health', 'korea/shap', 'korea/historical', 'korea/validation', 'korea/latest'];
+    const endpoints = ['historical', 'multi-horizon-validation', 'validation', 'shap', 'latest', 'data-health', 'monitoring/latest', 'monitoring/history', 'korea/shap', 'korea/historical', 'korea/validation', 'korea/latest'];
     return endpoints.map(path => ({ source: `/api/${path}`, destination: `${api}/api/${path}` }));
   },
 };
