@@ -4,6 +4,11 @@ A non-commercial research and portfolio/demo application for monitoring broad fi
 
 **Market Stress Early Warning is the core product.** Paper Trading, FX and portfolio analytics connect market conditions to portfolio exposure and recorded outcomes. The system does not predict individual stock prices, provide stock recommendations, or promise future returns.
 
+### Project Links
+
+🌐 **[Live Dashboard](https://marketstress-kr.duckdns.org/)** · 🎥 **[Project Presentation](docs/presentation/market-stress-presentation.mp4)** · 📊 **[Validation & Methodology](https://marketstress-kr.duckdns.org/validation)**
+
+
 ```text
 Independent U.S. / Korea Market Stress
     → Sector / Industry Stress
