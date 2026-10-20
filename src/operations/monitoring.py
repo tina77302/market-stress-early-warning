@@ -172,6 +172,8 @@ def append_publication(db, job, market, snapshot_id, encoded_snapshot, generated
         'credit_observation_date': min(dates[n] for n in credit) if all(dates[n] for n in credit) else None,
         'credit_observation_dates': {name: dates[name] for name in credit},
         'model_sha256': digest(payload.get('model_sha256')),
+        'input_hash': digest(payload.get('input_hash')),
+        'feature_schema_version': payload.get('feature_schema_version') if payload.get('feature_schema_version') == 1 else None,
         'input_snapshot_sha256': hashlib.sha256(encoded_snapshot.encode()).hexdigest(),
         'source_history_sha256': digest(payload.get('source_history_sha256')),
         'refresh_job_id': job['job_id'], 'snapshot_id': snapshot_id,
