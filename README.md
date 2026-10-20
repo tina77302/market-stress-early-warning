@@ -101,7 +101,7 @@ The three components receive equal weights:
 
 ### Project Links
 
-🌐 **[Live Dashboard](https://marketstress-kr.duckdns.org/)** · 🎥 **[Project Presentation](docs/presentation/market-stress-presentation.mp4)** · 📊 **[Validation & Methodology](https://marketstress-kr.duckdns.org/validation)**
+🌐 **[Live Dashboard](https://marketstress-kr.duckdns.org/)** · 🎥 **[1차 프로젝트 마무리 진행 상황 및 프레젠테이션](docs/presentation/market-stress-presentation.mp4)** · 📊 **[Validation & Methodology](https://marketstress-kr.duckdns.org/validation)**
 
 
 ```text
