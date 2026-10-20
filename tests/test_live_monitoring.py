@@ -300,3 +300,18 @@ def test_outcomes_are_separate_immutable_and_empty():
         with pytest.raises(sqlite3.IntegrityError):
             with store.database() as db: db.execute(sql)
     assert monitoring.latest('korea')['record']['record_id'] == rid
+
+
+@pytest.mark.parametrize('record_type', ['LIVE', 'RETROSPECTIVE'])
+def test_publication_retry_returns_original_without_second_record(record_type):
+    jid = job()
+    value = payload(jid)
+    first = store.publish(jid, 'korea', value, record_type=record_type)
+    second = store.publish(jid, 'korea', value, record_type=record_type)
+    assert second == first
+    assert len(monitoring.history('korea', record_type='ALL')['records']) == 1
+    with pytest.raises(ValueError, match='conflicts'):
+        store.publish(jid, 'korea', {**value, 'risk_score_10d': 90.0}, record_type=record_type)
+    with pytest.raises(ValueError, match='conflicts'):
+        store.publish(jid, 'korea', value,
+                      record_type='RETROSPECTIVE' if record_type == 'LIVE' else 'LIVE')

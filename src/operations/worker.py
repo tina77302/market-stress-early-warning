@@ -87,6 +87,15 @@ def build(market, directory):
         raise ValidationFailure('Invalid deployment model output.')
     if hashlib.sha256(model_path.read_bytes()).hexdigest()!=original_model_hash or result['risk_score_10d']!=round(float(probability[0,1])*100,1):
         raise ValidationFailure('Deployment model changed during inference; snapshot rejected.')
+    from .evidence import preserve
+    model_bytes = model_path.read_bytes()
+    if hashlib.sha256(model_bytes).hexdigest() != original_model_hash:
+        raise ValidationFailure('Model changed before evidence preservation.')
+    evidence = preserve(stage, columns=columns,
+                        dtypes=[str(features[column].dtype) for column in columns],
+                        values=features.loc[date, columns].tolist(),
+                        observation_date=spec['common_date'], model_bytes=model_bytes)
+    result.update(evidence)
     from .store import utcnow, artifact_reference
     result.update(market_observation_date=spec['common_date'],
                   data_retrieved_at=max((item['retrieved_at'] for item in spec['series'] if item.get('retrieved_at')), default=None),

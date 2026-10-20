@@ -47,6 +47,9 @@ def database():
       id INTEGER PRIMARY KEY, market TEXT NOT NULL, job_id TEXT, action TEXT NOT NULL,
       created_at TEXT NOT NULL, payload TEXT NOT NULL, delivered_at TEXT);
     ''')
+    db.execute('''CREATE TABLE IF NOT EXISTS publication_receipts (
+      job_id TEXT PRIMARY KEY REFERENCES jobs(job_id), market TEXT NOT NULL,
+      request_sha256 TEXT NOT NULL, snapshot_id TEXT NOT NULL REFERENCES snapshots(snapshot_id))''')
     from .monitoring import SCHEMA
     db.executescript(SCHEMA)
     try:
@@ -79,6 +82,14 @@ def publish(job_id, market, payload, report=None, *, record_type='RETROSPECTIVE'
         job = db.execute('SELECT * FROM jobs WHERE job_id=?',(job_id,)).fetchone()
         if not job or job['market'] != market:
             raise ValueError('Publication requires a ledger job for the same market.')
+        request_hash = hashlib.sha256((record_type + encoded).encode()).hexdigest()
+        receipt = db.execute('SELECT * FROM publication_receipts WHERE job_id=?', (job_id,)).fetchone()
+        if receipt:
+            if receipt['market'] != market or receipt['request_sha256'] != request_hash:
+                raise ValueError('Publication retry conflicts with committed request.')
+            return receipt['snapshot_id']
+        if job['status'] != 'RUNNING':
+            raise ValueError('Publication requires an active job.')
         previous = db.execute('SELECT s.observation_date FROM snapshots s JOIN current_snapshots c USING(snapshot_id) WHERE c.market=?', (market,)).fetchone()
         if previous and payload['last_updated'] < previous['observation_date']:
             raise ValueError('Refusing snapshot date regression.')
@@ -101,6 +112,8 @@ def publish(job_id, market, payload, report=None, *, record_type='RETROSPECTIVE'
         append_publication(db, job, market, snapshot_id, published, published_at,
                            record_type=record_type, refresh_payload=payload)
         db.execute('INSERT INTO current_snapshots VALUES (?,?) ON CONFLICT(market) DO UPDATE SET snapshot_id=excluded.snapshot_id', (market, snapshot_id))
+        db.execute('INSERT INTO publication_receipts VALUES (?,?,?,?)',
+                   (job_id, market, request_hash, snapshot_id))
         db.execute("UPDATE jobs SET status='SUCCESS',finished_at=?,snapshot_published=1,report=? WHERE job_id=?", (published_at, json.dumps(report, allow_nan=False) if report is not None else encoded, job_id))
     return snapshot_id
 
