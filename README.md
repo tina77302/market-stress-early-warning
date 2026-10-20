@@ -99,6 +99,11 @@ The rolling reference distribution is shifted so that the reference statistics f
 
 The three components receive equal weights:
 
+### Project Links
+
+🌐 **[Live Dashboard](https://marketstress-kr.duckdns.org/)** · 🎥 **[Project Presentation](docs/presentation/market-stress-presentation.mp4)** · 📊 **[Validation & Methodology](https://marketstress-kr.duckdns.org/validation)**
+
+
 ```text
 MSI = (Z_Equity + Z_VIX + Z_Credit) / 3
 ```
