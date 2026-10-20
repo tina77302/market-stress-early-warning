@@ -1,0 +1,124 @@
+{
+  "duration_seconds": 73.748,
+  "resolution": "1920x1080",
+  "output_fps": 24,
+  "capture_frames": 362,
+  "capture_method": "Browser screenshots sampled about 5.5 fps; original clip timing preserved, gaps between clips removed; intro/outro/captions and demonstration alert sound added.",
+  "alert_audio_start_seconds": 7.42,
+  "timeline": [
+    {
+      "start": 4.0,
+      "duration": 3.07,
+      "caption": "현재 한국시장: 38.6점, 경고 없음"
+    },
+    {
+      "start": 7.07,
+      "duration": 4.115,
+      "caption": "경보 재현: 과거 OOS 63.1점으로 경고 조건 충족"
+    },
+    {
+      "start": 11.185,
+      "duration": 4.137,
+      "caption": "삼성전자 검색: 실제 모의투자 계정"
+    },
+    {
+      "start": 15.322,
+      "duration": 5.12,
+      "caption": "최근 확정 종가 조회: 거래 가격은 현재 시점 기준"
+    },
+    {
+      "start": 20.442,
+      "duration": 4.184,
+      "caption": "기능 테스트용 10주 주문 확인: 예상 금액 2,180,000원"
+    },
+    {
+      "start": 24.626,
+      "duration": 5.186,
+      "caption": "가상 매수 체결: 경보는 참고 정보이며 자동매매가 아닙니다"
+    },
+    {
+      "start": 29.812,
+      "duration": 3.137,
+      "caption": "매수 후 대사: 현금 97,820,000원 + 주식 2,180,000원 = 1억원"
+    },
+    {
+      "start": 32.949,
+      "duration": 4.142,
+      "caption": "경보 상황의 분할 매도 테스트: 10주 중 5주"
+    },
+    {
+      "start": 37.091,
+      "duration": 3.137,
+      "caption": "5주 부분 매도 확인: 예상 매도 대금 1,090,000원"
+    },
+    {
+      "start": 40.228,
+      "duration": 5.052,
+      "caption": "5주 매도 체결: 남은 보유량 5주"
+    },
+    {
+      "start": 45.28,
+      "duration": 3.05,
+      "caption": "부분 매도 후: 현금 98,910,000원 + 잔여 주식 1,090,000원"
+    },
+    {
+      "start": 48.33,
+      "duration": 4.123,
+      "caption": "잔여 5주 정리: 시연 후 보유 주식을 남기지 않습니다"
+    },
+    {
+      "start": 52.453,
+      "duration": 3.068,
+      "caption": "잔여 5주 전량 매도 확인"
+    },
+    {
+      "start": 55.521,
+      "duration": 5.076,
+      "caption": "전량 매도 체결: 최종 현금 100,000,000원, 보유 0주"
+    },
+    {
+      "start": 60.597,
+      "duration": 3.047,
+      "caption": "최종 대사: 현금 1억원, 투자 자산 0원, 손익 0원"
+    },
+    {
+      "start": 63.644,
+      "duration": 3.033,
+      "caption": "체결 기록 확인: 10주 매수 → 5주 매도 → 5주 매도"
+    },
+    {
+      "start": 66.677,
+      "duration": 3.071,
+      "caption": "원본 서비스 대조 완료: 한국 계좌 1억원·보유 0주"
+    }
+  ],
+  "warning_source": {
+    "endpoint": "https://marketstress-kr.duckdns.org/api/korea/historical?days=10000",
+    "data_type": "purged_walk_forward_oos",
+    "date": "2026-08-10",
+    "risk_score": 63.1,
+    "threshold": 50,
+    "live_publication": false
+  },
+  "trade_source": "Original paper-trading account backend; current completed daily close, not historical-price backtest",
+  "trade_price": 218000,
+  "additional_trades": [
+    {
+      "side": "BUY",
+      "quantity": 10,
+      "time_kst": "2026-10-20 18:07:06"
+    },
+    {
+      "side": "SELL",
+      "quantity": 5,
+      "time_kst": "2026-10-20 18:07:51"
+    },
+    {
+      "side": "SELL",
+      "quantity": 5,
+      "time_kst": "2026-10-20 18:08:30"
+    }
+  ],
+  "final_cash_krw": 100000000,
+  "final_holdings": 0
+}
