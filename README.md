@@ -103,6 +103,7 @@ The three components receive equal weights:
 
 🌐 **[Live Dashboard](https://marketstress-kr.duckdns.org/)** · 🎥 **[1차 프로젝트 마무리 진행 상황 및 프레젠테이션](https://youtu.be/_5sGaK-tLlk)** · 🔔 **[한국시장 경보 재현 모의투자 영상](docs/demo/README.md)** · 📊 **[Validation & Methodology](https://marketstress-kr.duckdns.org/validation)**
 
+🖥️ **[중간발표 슬라이드 (Claude)](https://claude.ai/artifact/CSAxDKKbKz92Bi8J1Vouev)**
 
 ```text
 MSI = (Z_Equity + Z_VIX + Z_Credit) / 3
