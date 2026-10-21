@@ -1354,5 +1354,19 @@
   "Console navigation": "모니터링 탐색",
   "Credit Spread (bp)": "신용 스프레드 (bp)",
   "Industry Research": "산업 리서치",
-  "Portfolio": "포트폴리오"
+  "Portfolio": "포트폴리오",
+  "{v0} publications": "{v0}회 발행",
+  "chart_provenance_0": "LIVE 예측",
+  "chart_provenance_1": "LIVE 모니터링 시작",
+  "chart_provenance_2": "실제 LIVE 예측 기록 없음",
+  "chart_provenance_3": "LIVE 기록 없음",
+  "chart_provenance_4": "Historical OOS: 과거 시점 기준 검증 결과. LIVE: 실제 운영 중 발행된 예측.",
+  "chart_provenance_5": "차트 축: 관측일. 기록이 없는 구간은 채우지 않습니다.",
+  "chart_provenance_6": "LIVE Risk 변화",
+  "chart_provenance_7": "운영 경고 해제",
+  "chart_provenance_9": "Publication API는 과거 발행의 입력 지표·시장 수익률을 제공하지 않습니다. —는 0이 아니라 값 미제공을 뜻합니다.",
+  "chart_provenance_10": "Publication API에서 제공되지 않음",
+  "us_replay_0": "사후 재계산 (PIT 미검증)",
+  "us_replay_1": "보존 입력은 관측일 이후 수집되었습니다. 당시 이용 가능 여부와 데이터 수정 이력은 검증되지 않았습니다.",
+  "us_replay_2": "보존 원천 불완전으로 값 미제공. 사후 재계산 점수를 생성하지 않았습니다."
 }

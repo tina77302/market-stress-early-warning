@@ -1354,5 +1354,19 @@
   "Console navigation": "Console navigation",
   "Credit Spread (bp)": "Credit Spread (bp)",
   "Industry Research": "Industry Research",
-  "Portfolio": "Portfolio"
+  "Portfolio": "Portfolio",
+  "{v0} publications": "{v0} publications",
+  "chart_provenance_0": "LIVE Forecast",
+  "chart_provenance_1": "LIVE Monitoring Start",
+  "chart_provenance_2": "No LIVE forecast records",
+  "chart_provenance_3": "NO LIVE RECORDS",
+  "chart_provenance_4": "Historical OOS: past-time validation. LIVE: actual published forecasts.",
+  "chart_provenance_5": "Chart axis: observation date. Gaps are not filled.",
+  "chart_provenance_6": "LIVE Risk Trend",
+  "chart_provenance_7": "Operational warning cleared",
+  "chart_provenance_9": "Publication API does not provide historical input values or market returns; — means unavailable, not zero.",
+  "chart_provenance_10": "Not provided by publication API",
+  "us_replay_0": "Retrospective · PIT not verified",
+  "us_replay_1": "Preserved inputs were retrieved later; historical availability and revisions are not verified.",
+  "us_replay_2": "Unavailable: incomplete preserved inputs. No retrospective scores generated."
 }

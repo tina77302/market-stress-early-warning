@@ -1,5 +1,6 @@
 import type { HistoryPoint, Market } from './market-data';
 import retrospectiveArchive from './retrospective-observations.json';
+import usRetrospectiveArchive from './us-retrospective-observations.json';
 
 export type Health = 'CURRENT' | 'STALE' | 'INCOMPLETE' | 'UNAVAILABLE';
 export interface MonitoringRecord {
@@ -46,13 +47,13 @@ export function historicalPoints(rows: HistoryPoint[], market: Market): Timeline
       inputs:{index:close,volatility:numeric(row[market==='korea'?'vkospi':'vix']),credit:numeric(row[market==='korea'?'korea_credit_spread_bp':'baa_treasury_spread'])}};
   });
 }
-/** Summarize prior observations for change calculations only; never compose the primary chart with this. */
+/** One primary observation per date. All publication identities remain in combinedPoints. */
 export function datedPoints(points: TimelinePoint[]): TimelinePoint[] {
   const dates = new Map<string, TimelinePoint>();
   for (const point of points) {
     const previous = dates.get(point.date);
     const priority = (p: TimelinePoint) => p.source === 'LIVE' ? 3 : p.record ? 2 : p.archive ? 1 : 0;
-    if (!previous || priority(point) > priority(previous) || (priority(point) === priority(previous) && (point.record?.publication_sequence ?? 0) > (previous.record?.publication_sequence ?? 0))) dates.set(point.date, point);
+    if (!previous || priority(point) > priority(previous) || (priority(point) === priority(previous) && ((point.record?.publication_sequence ?? 0) > (previous.record?.publication_sequence ?? 0) || (!(point.record && previous.record) && Date.parse(point.published ?? '') > Date.parse(previous.published ?? ''))))) dates.set(point.date, point);
   }
   return Array.from(dates.values()).sort((a,b) => a.date.localeCompare(b.date));
 }
@@ -81,9 +82,21 @@ export function provenance(record: MonitoringRecord | null) {
 }
 
 /** Frontend display evidence only: never promoted to publication-ledger records. */
-export interface ArchiveEvidence { basis: string; snapshotId: string | null; modelSha256: string; sourceSha256: string }
+export interface ArchiveEvidence { basis: string; snapshotId: string | null; modelSha256: string; sourceSha256: string; pitVerified?: boolean }
+
+export function pointSourceLabel(point: TimelinePoint): string {
+  return point.archive?.pitVerified === false ? 'Retrospective · PIT not verified' : point.source === 'OOS' ? 'HISTORICAL OOS' : point.source;
+}
+
+export const usReplayUnavailableDates = usRetrospectiveArchive.unavailable_dates;
 
 export function archivePoints(market: Market): TimelinePoint[] {
+  if (market === 'us') return usRetrospectiveArchive.observations.map(row => ({
+    id:`archive-us-${row.date}`,date:row.date,score:row.score,msi:row.msi,movement:null,
+    warning:row.warning,stress:row.stress,published:null,health:null,source:'RETROSPECTIVE',record:null,
+    archive:{basis:row.basis,snapshotId:null,modelSha256:usRetrospectiveArchive.model_sha256,
+      sourceSha256:usRetrospectiveArchive.source_history_sha256,pitVerified:false},
+  }));
   if (market !== retrospectiveArchive.market) return [];
   return retrospectiveArchive.observations.map(row=>({id:`archive-${market}-${row.date}`,date:row.date,score:row.score,msi:row.msi,movement:row.movement,
     warning:row.warning,stress:row.stress,published:row.published,health:null,source:'RETROSPECTIVE',record:null,
@@ -116,4 +129,23 @@ export function pointTrajectory(points: TimelinePoint[], id: string) {
   const selected = points.find(p => p.id === id);
   const prior = selected ? datedPoints(points.filter(p => p.source === selected.source && p.date < selected.date)) : [];
   return trajectory(selected ? [...prior, selected] : [], selected?.date ?? '');
+}
+
+/** Independent context layers: same-date LIVE precedence must not erase OOS context. */
+export function chartContext(points: TimelinePoint[], count: number): TimelinePoint[] {
+  const historical = datedPoints(points.filter(p => p.source === 'OOS'));
+  const context = count ? historical.slice(-count) : historical;
+  const evidence = buildUpWindow(datedPoints(points.filter(p => p.source !== 'OOS')), count);
+  return combinedPoints([...context, ...evidence]);
+}
+
+/** Publication order is authoritative; a same-date republication is not a risk step. */
+export function liveRiskTrend(records: MonitoringRecord[]) {
+  const ordered = [...records].filter(r => r.record_type === 'LIVE').sort((a,b) => b.publication_sequence-a.publication_sequence);
+  const current = ordered[0];
+  const previous = current && ordered.find(r => r.market === current.market && r.observation_date < current.observation_date);
+  if (!current || !previous || !finite(current.risk_score) || !finite(previous.risk_score)) return null;
+  return {current, previous, change: current.risk_score-previous.risk_score,
+    cleared: previous.operational_warning === true && current.operational_warning === false &&
+      previous.risk_score >= 50 && current.risk_score < 50};
 }

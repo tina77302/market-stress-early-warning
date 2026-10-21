@@ -128,7 +128,7 @@ test('default view shows the verified Korea sequence without requiring a LIVE le
  const sequence=markup.split('class="trajectory-sequence"')[1].split('class="trajectory-readout"')[0];
  assert.deepEqual([...sequence.matchAll(/<strong>([\d.]+)<\/strong>/g)].map(m=>m[1]),['12.1','15.6','37.8','32.3','40.5']);
  assert.ok(markup.includes('score-path'));assert.ok(sequence.includes('RETRO'));assert.ok(!sequence.includes('>LIVE<'));
- const archive=data.archivePoints('korea');assert.ok(archive.every(p=>p.source==='RETROSPECTIVE'&&p.record===null));assert.equal(data.archivePoints('us').length,0);
+ const archive=data.archivePoints('korea');assert.ok(archive.every(p=>p.source==='RETROSPECTIVE'&&p.record===null));assert.equal(data.archivePoints('us').length,17);
 });
 test('archive replay dates have no publication-time claim and snapshot dates retain actual publication times',()=>{
  const points=data.archivePoints('korea');
@@ -139,10 +139,10 @@ test('archive replay dates have no publication-time claim and snapshot dates ret
 test('mixed provenance keeps publication evidence authoritative while retaining every alternative',()=>{
  const all=data.availablePoints(history,'korea',[record(10,{risk_score:41})],[record(11,{record_type:'RETROSPECTIVE',risk_score:42})]);
  const dated=data.datedPoints(all);assert.equal(dated.at(-1).score,41);assert.equal(dated.at(-1).source,'LIVE');assert.equal(all.filter(p=>p.date==='2026-10-15').length,4);
- assert.ok(data.availablePoints(history,'us',[],[]).every(p=>p.source==='OOS'));
+ assert.ok(data.availablePoints(history,'us',[],[]).every(p=>p.source==='OOS'||(p.source==='RETROSPECTIVE'&&p.archive?.pitVerified===false)));
 });
 test('default US view renders OOS scores without manufacturing publication timestamps',()=>{
- const markup=render(RiskTrajectory,{...props,market:'us',history:history.map(({kospi200,...row})=>({...row,spy:kospi200}))});assert.ok(markup.includes('score-path'));assert.ok(markup.includes('HISTORICAL OOS'));assert.ok(markup.includes('Not recorded · no publication-time claim'));assert.ok(!markup.includes('RETRO</span>'));
+ const markup=render(RiskTrajectory,{...props,market:'us',history:history.map(({kospi200,...row})=>({...row,spy:kospi200}))});assert.ok(markup.includes('score-path'));assert.ok(markup.includes('HISTORICAL OOS'));assert.ok(markup.includes('Not recorded · no publication-time claim'));assert.ok(markup.includes('Retrospective · PIT not verified'));
 });
 test('recent sequence buttons select replay and recorded dates with truthful details',()=>{
  const h=trajectoryHarness({...props,history:[]});h.paint();
